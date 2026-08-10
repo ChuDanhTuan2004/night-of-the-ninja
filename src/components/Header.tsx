@@ -5,7 +5,6 @@ import { sounds } from '../utils/audio';
 interface HeaderProps {
   roomCode?: string;
   currentRound?: number;
-  maxRounds?: number;
   onOpenRules: () => void;
   onReturnLobby?: () => void;
 }
@@ -13,7 +12,6 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   roomCode,
   currentRound,
-  maxRounds = 3,
   onOpenRules,
   onReturnLobby,
 }) => {
@@ -56,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
             <Flame className="w-4 h-4" />
             <span>HIỆP:</span>
             <span className="font-bold">
-              {currentRound} / {maxRounds}
+              {currentRound}
             </span>
           </div>
         )}

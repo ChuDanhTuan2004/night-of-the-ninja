@@ -34,8 +34,8 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
   }, []);
 
   const sortedPlayers = [...gameState.players].sort((a, b) => b.totalScore - a.totalScore);
-  const winner = sortedPlayers[0];
-  const isGameOver = gameState.status === 'GAME_OVER' || gameState.currentRound >= gameState.maxRounds;
+  const winners = sortedPlayers.filter((player) => gameState.gameWinners?.includes(player.id));
+  const isGameOver = gameState.status === 'GAME_OVER';
 
   return (
     <div className="game-container screen-stack min-h-[calc(100vh-140px)] justify-center">
@@ -43,16 +43,16 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
       <div className="game-card game-card-section text-center space-y-3">
         <div className="badge badge-primary">
           <Sparkles className="w-4 h-4" />
-          <span>{isGameOver ? 'KẾT THÚC CẢ TRẬN ĐẤU (3 HIỆP)' : `KẾT THÚC HIỆP ${gameState.currentRound}`}</span>
+          <span>{isGameOver ? 'KẾT THÚC TRẬN ĐẤU · MỐC 10 ĐIỂM' : `KẾT THÚC HIỆP ${gameState.currentRound}`}</span>
         </div>
 
         {isGameOver ? (
           <div>
             <h1 className="phase-title">
-              🏆 BẬC THẦY NINJA TỐI CAO: {winner?.name}!
+              🏆 BẬC THẦY NINJA TỐI CAO: {winners.map((player) => player.name).join(', ')}!
             </h1>
             <p className="text-sm text-secondary mt-1">
-              Đạt tổng điểm Danh Dự vinh quang cao nhất: <strong className="text-white text-lg">{winner?.totalScore} Điểm</strong>!
+              Tổng điểm Danh Dự cao nhất: <strong className="text-white text-lg">{winners[0]?.totalScore} Điểm</strong>!
             </p>
           </div>
         ) : (
@@ -94,10 +94,13 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
                   <div className="truncate">
                     <div className="player-card-name flex items-center gap-2">
                       <span>{player.name}</span>
-                      {player.house && (
+                      {player.house && player.revealedHouse && (
                         <span className="badge px-2 min-h-0">
                           {player.house.icon} {player.house.nameVi}
                         </span>
+                      )}
+                      {player.house && !player.revealedHouse && (
+                        <span className="badge px-2 min-h-0">🔒 House không lộ</span>
                       )}
                     </div>
                     <div className="player-card-status">

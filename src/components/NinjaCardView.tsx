@@ -62,12 +62,12 @@ export const NinjaCardView: React.FC<NinjaCardViewProps> = ({
       onClick={isDisabled ? undefined : onClick}
       className={`ninja-card ${sizeClasses} ${isSelected ? 'is-selected' : ''} select-none ${className}`}
     >
-      {/* Top Header: Speed Rank Badge & Name */}
+      {/* Phase, priority & name */}
       <div className="flex items-center justify-between gap-1 w-full border-b border-white/10 pb-2">
         <span
           className="ninja-card-rank"
         >
-          P{card.rank} • {card.rankNameVi}
+          {card.priority ? `P${card.priority} • ` : ''}{card.phaseNameVi}
         </span>
         <span className="text-xl">{card.icon}</span>
       </div>

@@ -3,45 +3,52 @@ export type HouseType = 'LOTUS' | 'CRANE' | 'RONIN';
 export interface HouseCard {
   id: string;
   type: HouseType;
+  rank: number | null;
   nameVi: string;
   descriptionVi: string;
   icon: string;
 }
 
-export type CardRank = 1 | 2 | 3 | 4;
+export type NinjaPhase = 'SPY' | 'MYSTIC' | 'TRICKSTER' | 'BLIND_ASSASSIN' | 'SHINOBI';
+export type CardPriority = 1 | 2 | 3 | 4 | 5 | 6;
+export type NinjaCardType = 'NORMAL' | 'TRICKSTER' | 'REACTION' | 'REVEAL';
 
 export type EffectType =
-  | 'SPY_HOUSE'          // Look at player's house card
-  | 'SPY_DECK'           // Look at top 2 deck cards
-  | 'SPY_CLAN_CHECK'     // Check if target is Lotus/Crane
-  | 'SWAP_HOUSE'         // Swap house cards between 2 players
-  | 'FORCE_REVEAL'       // Force 1 player to publicly reveal house
-  | 'MIND_SHIFT'         // Swap hand cards with another player
-  | 'ASSASSINATE'        // Try to kill target player
-  | 'TWIN_BLADES'        // Kill adjacent left/right player
-  | 'POISON_SHURIKEN'    // Kill target player + bonus honor token if success
-  | 'IRON_GUARD'         // Protect self from assassinations this round
-  | 'SUBSTITUTION'       // Deflect assassination onto another player
-  | 'RETALIATION'        // If killed this round, kill your assassin back!
-  | 'HONOR_THIEF';       // Steal 1 honor token from a surviving player
+  | 'LOOK_HOUSE'
+  | 'LOOK_HOUSE_AND_NINJA'
+  | 'SHAPESHIFTER'
+  | 'GRAVE_DIGGER'
+  | 'TROUBLEMAKER'
+  | 'SPIRIT_MERCHANT'
+  | 'THIEF'
+  | 'JUDGE_KILL'
+  | 'BLIND_ASSASSIN_KILL'
+  | 'SHINOBI_KILL'
+  | 'MIRROR_MONK'
+  | 'MARTYR'
+  | 'MASTERMIND';
+
+export type CardTargetType = 'OTHER_PLAYER' | 'TWO_PLAYERS' | 'DISCARD_CARD';
 
 export interface NinjaCard {
   id: string;
   name: string;
   nameVi: string;
-  rank: CardRank;
-  rankNameVi: string;
+  cardType: NinjaCardType;
+  phase: NinjaPhase | null;
+  priority: CardPriority | null;
+  phaseNameVi: string;
   descriptionVi: string;
   effectType: EffectType;
   requiresTarget: boolean;
-  targetType?: 'ANY_PLAYER' | 'OTHER_PLAYER' | 'ADJACENT_PLAYER' | 'TWO_PLAYERS';
+  targetType?: CardTargetType;
   icon: string;
   flavorQuoteVi?: string;
 }
 
 export interface HonorToken {
   id: string;
-  value: number; // 2, 3, 4, or 5 points
+  value: number;
 }
 
 export interface Player {
@@ -51,23 +58,14 @@ export interface Player {
   isBot: boolean;
   isHost: boolean;
   isReady: boolean;
-  
-  // Secret/Game State
   house: HouseCard | null;
   revealedHouse: boolean;
+  /** True after Shapeshifter swaps this player's House; even its owner cannot inspect it. */
+  unknownCurrentHouse: boolean;
   isAlive: boolean;
-  
-  // Hand & Selection
   draftHand: NinjaCard[];
-  selectedCards: NinjaCard[]; // Exactly 2 cards kept after drafting
+  selectedCards: NinjaCard[];
   playedCardsThisPhase: NinjaCard[];
-  
-  // Status flags during execution
-  isProtected: boolean; // From Iron Guard
-  substituteTargetId?: string; // From Substitution
-  retaliateOnDeath: boolean; // From Retaliation
-  
-  // Scoring
   honorTokens: HonorToken[];
   totalScore: number;
   killsThisRound: number;
@@ -76,7 +74,7 @@ export interface Player {
 export interface ActionLogEntry {
   id: string;
   timestamp: string;
-  phase?: CardRank | 'DRAFT' | 'ROUND_START' | 'ROUND_END';
+  phase?: NinjaPhase | 'DRAFT' | 'ROUND_START' | 'ROUND_END';
   messageVi: string;
   type: 'INFO' | 'ACTION' | 'KILL' | 'DEFENSE' | 'REVEAL' | 'HONOR';
   actorId?: string;
@@ -98,27 +96,18 @@ export interface GameState {
   roomCode: string;
   status: GameStatus;
   gameMode: GameMode;
-  currentRound: number; // 1, 2, or 3
-  maxRounds: number; // 3
+  currentRound: number;
   draftPickNumber: 1 | 2;
-  
-  // Execution Sub-phase
-  executionRank: CardRank; // 1, 2, 3, or 4
-  executionStep: number; // Index of current acting card in queue
-  
+  executionPhase: NinjaPhase;
+  executionStep: number;
   players: Player[];
   honorDeck: HonorToken[];
   ninjaDeck: NinjaCard[];
   ninjaDiscardPile: NinjaCard[];
-  
-  // Round results
   roundWinnerClan: HouseType | 'DRAW' | null;
   roundSummaryLogs: string[];
   actionLogs: ActionLogEntry[];
-
-  // Information visible only to the player who triggered a secret effect.
   privateNotices?: Record<string, string[]>;
-  
-  // Bot belief state for Bot AI (stored on server/local engine)
+  gameWinners?: string[];
   botBeliefs?: Record<string, Record<string, { LOTUS: number; CRANE: number; RONIN: number }>>;
 }

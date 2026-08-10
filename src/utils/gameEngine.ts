@@ -1,379 +1,249 @@
 import {
-  GameState,
-  Player,
-  HouseCard,
+  ActionLogEntry,
   GameMode,
+  GameState,
+  HouseCard,
   HouseType,
   NinjaCard,
-  CardRank,
-  ActionLogEntry,
+  NinjaPhase,
+  Player,
 } from '../types/game';
-import {
-  HOUSES,
-  createInitialHonorDeck,
-  createFullNinjaDeck,
-  shuffleArray,
-} from '../data/cards';
+import { HOUSES, createFullNinjaDeck, createInitialHonorDeck, shuffleArray } from '../data/cards';
+
+export const NIGHT_PHASES: NinjaPhase[] = ['SPY', 'MYSTIC', 'TRICKSTER', 'BLIND_ASSASSIN', 'SHINOBI'];
+export const PENDING_CARD_AFTER_OWNER_DEATH = 'CANCEL' as const;
+
+const PHASE_LABELS: Record<NinjaPhase, string> = {
+  SPY: 'Do thám',
+  MYSTIC: 'Thần bí',
+  TRICKSTER: 'Mưu sĩ',
+  BLIND_ASSASSIN: 'Sát thủ mù',
+  SHINOBI: 'Shinobi',
+};
+
+function now() {
+  return new Date().toLocaleTimeString('vi-VN');
+}
+
+function logEntry(messageVi: string, type: ActionLogEntry['type'], extra: Partial<ActionLogEntry> = {}): ActionLogEntry {
+  return { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, timestamp: now(), messageVi, type, ...extra };
+}
 
 export function createHouseDeckForPlayerCount(count: number): HouseCard[] {
+  const houseSize = Math.floor(count / 2);
   const cards: HouseCard[] = [];
-  let lotusCount = 2;
-  let craneCount = 2;
-  let roninCount = 0;
 
-  if (count === 4) {
-    lotusCount = 2;
-    craneCount = 2;
-  } else if (count === 5) {
-    lotusCount = 2;
-    craneCount = 2;
-    roninCount = 1;
-  } else if (count === 6) {
-    lotusCount = 3;
-    craneCount = 3;
-  } else if (count === 7) {
-    lotusCount = 3;
-    craneCount = 3;
-    roninCount = 1;
-  } else if (count === 8) {
-    lotusCount = 4;
-    craneCount = 4;
-  } else if (count === 9) {
-    lotusCount = 4;
-    craneCount = 4;
-    roninCount = 1;
-  } else if (count === 10) {
-    lotusCount = 5;
-    craneCount = 5;
-  } else {
-    // 11 or default
-    lotusCount = 5;
-    craneCount = 5;
-    roninCount = 1;
+  for (let rank = 1; rank <= houseSize; rank += 1) {
+    cards.push({
+      ...HOUSES.LOTUS,
+      id: `LOTUS_${rank}`,
+      rank,
+      nameVi: `Hoa Sen ${rank}`,
+      descriptionVi: `Gia tộc Hoa Sen · Rank ${rank}. Số càng nhỏ càng mạnh.`,
+    });
+    cards.push({
+      ...HOUSES.CRANE,
+      id: `CRANE_${rank}`,
+      rank,
+      nameVi: `Chim Hạc ${rank}`,
+      descriptionVi: `Gia tộc Chim Hạc · Rank ${rank}. Số càng nhỏ càng mạnh.`,
+    });
   }
 
-  for (let i = 0; i < lotusCount; i++) cards.push({ ...HOUSES.LOTUS });
-  for (let i = 0; i < craneCount; i++) cards.push({ ...HOUSES.CRANE });
-  for (let i = 0; i < roninCount; i++) cards.push({ ...HOUSES.RONIN });
-
+  if (count % 2 === 1) cards.push({ ...HOUSES.RONIN, id: 'RONIN', rank: null });
   return shuffleArray(cards);
 }
 
 export function initializeNewGame(players: Player[], mode: GameMode): GameState {
-  const honorDeck = createInitialHonorDeck();
-  const ninjaDeck = createFullNinjaDeck();
-
-  const state: GameState = {
+  return {
     roomCode: Math.random().toString(36).substring(2, 7).toUpperCase(),
     status: 'LOBBY',
     gameMode: mode,
     currentRound: 1,
-    maxRounds: 3,
     draftPickNumber: 1,
-    executionRank: 1,
+    executionPhase: 'SPY',
     executionStep: 0,
-    players: players.map((p) => ({
-      ...p,
+    players: players.map((player) => ({
+      ...player,
       isAlive: true,
       revealedHouse: false,
+      unknownCurrentHouse: false,
       house: null,
       draftHand: [],
       selectedCards: [],
       playedCardsThisPhase: [],
-      isProtected: false,
-      retaliateOnDeath: false,
       honorTokens: [],
       totalScore: 0,
       killsThisRound: 0,
     })),
-    honorDeck,
-    ninjaDeck,
+    honorDeck: createInitialHonorDeck(),
+    ninjaDeck: createFullNinjaDeck(),
     ninjaDiscardPile: [],
     roundWinnerClan: null,
     roundSummaryLogs: [],
     privateNotices: {},
-    actionLogs: [
-      {
-        id: `log-init-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString('vi-VN'),
-        messageVi: 'Trận đấu Night of the Ninja đã được khởi tạo!',
-        type: 'INFO',
-      },
-    ],
+    gameWinners: [],
+    actionLogs: [logEntry('Trận đấu Night of the Ninja đã được khởi tạo.', 'INFO')],
   };
-
-  return state;
 }
 
 export function startRound(state: GameState, roundNum: number): GameState {
   const houseDeck = createHouseDeckForPlayerCount(state.players.length);
-  const ninjaDeck = createFullNinjaDeck();
-
-  const updatedPlayers = state.players.map((player, idx) => ({
+  const fullNinjaDeck = createFullNinjaDeck();
+  const players = state.players.map((player, index) => ({
     ...player,
     isAlive: true,
     revealedHouse: false,
-    house: houseDeck[idx] || HOUSES.LOTUS,
-    draftHand: [],
-    selectedCards: [],
-    playedCardsThisPhase: [],
-    isProtected: false,
-    retaliateOnDeath: false,
+    unknownCurrentHouse: false,
+    house: houseDeck[index] ?? null,
+    draftHand: [] as NinjaCard[],
+    selectedCards: [] as NinjaCard[],
+    playedCardsThisPhase: [] as NinjaCard[],
     killsThisRound: 0,
   }));
 
-  // Deal 3 Ninja cards to each player for Drafting
-  let deckIdx = 0;
-  for (let i = 0; i < 3; i++) {
-    for (const player of updatedPlayers) {
-      if (deckIdx < ninjaDeck.length) {
-        player.draftHand.push(ninjaDeck[deckIdx++]);
-      }
+  let deckIndex = 0;
+  for (let cardIndex = 0; cardIndex < 3; cardIndex += 1) {
+    for (const player of players) {
+      const card = fullNinjaDeck[deckIndex];
+      if (card) player.draftHand.push(card);
+      deckIndex += 1;
     }
   }
-
-  const remainingNinjaDeck = ninjaDeck.slice(deckIdx);
-
-  const newLog: ActionLogEntry = {
-    id: `log-round-${roundNum}-${Date.now()}`,
-    timestamp: new Date().toLocaleTimeString('vi-VN'),
-    phase: 'ROUND_START',
-    messageVi: `--- HIỆP ${roundNum} BẮT ĐẦU --- Thẻ Gia Tộc đã được phát bí mật!`,
-    type: 'INFO',
-  };
 
   const nextState: GameState = {
     ...state,
     status: 'DRAFTING',
     currentRound: roundNum,
     draftPickNumber: 1,
-    executionRank: 1,
+    executionPhase: 'SPY',
     executionStep: 0,
-    players: updatedPlayers,
-    ninjaDeck: remainingNinjaDeck,
+    players,
+    ninjaDeck: fullNinjaDeck.slice(deckIndex),
     ninjaDiscardPile: [],
     roundWinnerClan: null,
     roundSummaryLogs: [],
     privateNotices: {},
-    actionLogs: [newLog, ...state.actionLogs],
-  };
-
-  // Auto pick for bots in initial drafting if any
-  return processBotDraftingIfNeeded(nextState);
-}
-
-export function handleDraftPick(
-  state: GameState,
-  playerId: string,
-  cardId: string
-): GameState {
-  const draftPickNumber = state.draftPickNumber || 1;
-  const actingPlayer = state.players.find((player) => player.id === playerId);
-  if (
-    !actingPlayer ||
-    actingPlayer.selectedCards.length >= 2 ||
-    actingPlayer.selectedCards.length !== draftPickNumber - 1
-  ) {
-    return state;
-  }
-
-  const selectedCard = actingPlayer.draftHand.find((card) => card.id === cardId);
-  if (!selectedCard) return state;
-
-  const isSecondPick = actingPlayer.selectedCards.length === 1;
-  const discardedCards = isSecondPick
-    ? actingPlayer.draftHand.filter((card) => card.id !== cardId)
-    : [];
-
-  let updatedPlayers = state.players.map((p) => {
-    if (p.id !== playerId) return p;
-
-    const card = p.draftHand.find((c) => c.id === cardId);
-    if (!card) return p;
-
-    return {
-      ...p,
-      selectedCards: [...p.selectedCards, card],
-      draftHand: isSecondPick
-        ? []
-        : p.draftHand.filter((c) => c.id !== cardId),
-    };
-  });
-
-  // Check if ALL players have picked 1 card in this draft turn
-  const draftTurnPicks = updatedPlayers[0].selectedCards.length;
-  const allPicked = updatedPlayers.every((p) => p.selectedCards.length === draftTurnPicks);
-  let nextDraftPickNumber = draftPickNumber;
-
-  if (allPicked) {
-    if (draftTurnPicks < 2) {
-      // After the first pick, pass the two remaining cards to the next player.
-      const hands = updatedPlayers.map((p) => p.draftHand);
-      updatedPlayers = updatedPlayers.map((p, idx) => {
-        // Round 1 & 3 pass left (idx + 1), Round 2 pass right (idx - 1)
-        const isLeft = state.currentRound % 2 !== 0;
-        const sourceIdx = isLeft
-          ? (idx + updatedPlayers.length - 1) % updatedPlayers.length
-          : (idx + 1) % updatedPlayers.length;
-
-        return {
-          ...p,
-          draftHand: hands[sourceIdx],
-        };
-      });
-      nextDraftPickNumber = 2;
-    } else {
-      // Drafting Complete! Move to Execution Phase!
-      const logMsg: ActionLogEntry = {
-        id: `log-draft-done-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString('vi-VN'),
-        messageVi: 'Giai đoạn Tuyển Chọn kết thúc! Chuẩn bị bước vào Đêm Hành Động!',
-        type: 'INFO',
-      };
-
-      const draftingDoneState: GameState = {
-        ...state,
-        status: 'EXECUTION',
-        executionRank: 1,
-        executionStep: 0,
-        players: updatedPlayers,
-        ninjaDiscardPile: [
-          ...(state.ninjaDiscardPile || []),
-          ...discardedCards,
-        ],
-        actionLogs: [logMsg, ...state.actionLogs],
-      };
-
-      return processNextExecutionStep(draftingDoneState);
-    }
-  }
-
-  const newState: GameState = {
-    ...state,
-    players: updatedPlayers,
-    draftPickNumber: nextDraftPickNumber as 1 | 2,
-    ninjaDiscardPile: [
-      ...(state.ninjaDiscardPile || []),
-      ...discardedCards,
+    gameWinners: [],
+    actionLogs: [
+      logEntry(`— HIỆP ${roundNum} BẮT ĐẦU — House đã được phát bí mật.`, 'INFO', { phase: 'ROUND_START' }),
+      ...state.actionLogs,
     ],
   };
 
-  const processedState = processBotDraftingIfNeeded(newState);
+  return processBotDraftingIfNeeded(nextState);
+}
 
-  return processedState;
+export function handleDraftPick(state: GameState, playerId: string, cardId: string): GameState {
+  if (state.status !== 'DRAFTING') return state;
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  const expectedPicks = state.draftPickNumber - 1;
+  if (!player || player.selectedCards.length !== expectedPicks) return state;
+
+  const selectedCard = player.draftHand.find((card) => card.id === cardId);
+  if (!selectedCard) return state;
+
+  const isSecondPick = state.draftPickNumber === 2;
+  const discarded = isSecondPick ? player.draftHand.filter((card) => card.id !== cardId) : [];
+  let players = state.players.map((candidate) => candidate.id === playerId
+    ? {
+        ...candidate,
+        selectedCards: [...candidate.selectedCards, selectedCard],
+        draftHand: isSecondPick ? [] : candidate.draftHand.filter((card) => card.id !== cardId),
+      }
+    : candidate);
+  const discardPile = [...state.ninjaDiscardPile, ...discarded];
+
+  const allPicked = players.every((candidate) => candidate.selectedCards.length === state.draftPickNumber);
+  if (!allPicked) return processBotDraftingIfNeeded({ ...state, players, ninjaDiscardPile: discardPile });
+
+  if (!isSecondPick) {
+    const hands = players.map((candidate) => candidate.draftHand);
+    // Every round passes the two unchosen cards to the player on the left.
+    players = players.map((candidate, index) => ({
+      ...candidate,
+      draftHand: hands[(index + players.length - 1) % players.length],
+    }));
+    return processBotDraftingIfNeeded({
+      ...state,
+      players,
+      draftPickNumber: 2,
+      ninjaDiscardPile: discardPile,
+    });
+  }
+
+  return processNextExecutionStep({
+    ...state,
+    status: 'EXECUTION',
+    executionPhase: 'SPY',
+    executionStep: 0,
+    players,
+    ninjaDiscardPile: discardPile,
+    actionLogs: [logEntry('Draft kết thúc. Đêm bắt đầu với phase Do thám.', 'INFO', { phase: 'SPY' }), ...state.actionLogs],
+  });
 }
 
 export function processBotDraftingIfNeeded(state: GameState): GameState {
   if (state.status !== 'DRAFTING') return state;
-
-  let currentState = { ...state };
-  let hasBotPicked = false;
-
-  for (const player of currentState.players) {
-    if (player.isBot && player.draftHand.length > 0) {
-      const maxPickedByAny = Math.max(...currentState.players.map((p) => p.selectedCards.length));
-      if (player.selectedCards.length < maxPickedByAny || currentState.players.every(p => p.selectedCards.length === player.selectedCards.length)) {
-        // Smart Bot Card Choice
-        const chosenCard = chooseBotDraftCard(player, currentState);
-        if (chosenCard) {
-          hasBotPicked = true;
-          currentState = handleDraftPick(currentState, player.id, chosenCard.id);
-          if (currentState.status !== 'DRAFTING') break;
-        }
-      }
-    }
-  }
-
-  return hasBotPicked && currentState.status === 'DRAFTING'
-    ? processBotDraftingIfNeeded(currentState)
-    : currentState;
+  const bot = state.players.find((player) =>
+    player.isBot &&
+    player.selectedCards.length === state.draftPickNumber - 1 &&
+    player.draftHand.length > 0);
+  if (!bot) return state;
+  const chosenCard = chooseBotDraftCard(bot);
+  return chosenCard ? handleDraftPick(state, bot.id, chosenCard.id) : state;
 }
 
-function chooseBotDraftCard(bot: Player, state: GameState): NinjaCard | null {
-  if (!bot.draftHand || bot.draftHand.length === 0) return null;
+function chooseBotDraftCard(bot: Player): NinjaCard | null {
+  const weights: Record<NinjaCard['cardType'], number> = { REACTION: 9, REVEAL: 8, TRICKSTER: 7, NORMAL: 5 };
+  return [...bot.draftHand].sort((a, b) =>
+    weights[b.cardType] - weights[a.cardType] ||
+    (b.phase === 'SHINOBI' ? 1 : 0) - (a.phase === 'SHINOBI' ? 1 : 0))[0] ?? null;
+}
 
-  // Bot strategy based on House
-  // Rank 3 (Assassin) & Rank 4 (Guard) are highly valued
-  const botHouse = bot.house?.type;
-  
-  // Prefer Rank 3 Assassin if hand has it
-  const assassinCard = bot.draftHand.find((c) => c.rank === 3);
-  if (assassinCard && Math.random() < 0.7) return assassinCard;
-
-  // Prefer Rank 4 Guard if bot feels threatened
-  const guardCard = bot.draftHand.find((c) => c.rank === 4);
-  if (guardCard && Math.random() < 0.6) return guardCard;
-
-  // Prefer Rank 1 Spy / Rank 2 Mystic
-  const spyCard = bot.draftHand.find((c) => c.rank === 1 || c.rank === 2);
-  if (spyCard) return spyCard;
-
-  return bot.draftHand[0];
+function getNextAction(state: GameState): { player: Player; card: NinjaCard } | null {
+  const queue = state.players.flatMap((player, playerIndex) => {
+    if (!player.isAlive) return [];
+    return player.selectedCards
+      .filter((card) =>
+        card.phase === state.executionPhase &&
+        !player.playedCardsThisPhase.some((played) => played.id === card.id))
+      .map((card) => ({ player, playerIndex, card }));
+  });
+  queue.sort((a, b) => (a.card.priority ?? 99) - (b.card.priority ?? 99) || a.playerIndex - b.playerIndex);
+  return queue[0] ?? null;
 }
 
 export function processNextExecutionStep(state: GameState): GameState {
   if (state.status !== 'EXECUTION') return state;
-
-  // Find cards to execute for current rank (1 -> 2 -> 3 -> 4)
-  const currentRank = state.executionRank;
-
-  // Collect all unexecuted cards of currentRank belonging to ALIVE players
-  const activeCardsToExecute: { player: Player; card: NinjaCard }[] = [];
-
-  for (const player of state.players) {
-    if (!player.isAlive) continue; // Dead players can't act unless Retaliation
-    const cardsOfRank = player.selectedCards.filter(
-      (c) => c.rank === currentRank && !player.playedCardsThisPhase.some((p) => p.id === c.id)
+  const action = getNextAction(state);
+  if (action) {
+    if (!action.player.isBot) return state;
+    const botAction = chooseBotAction(action.player, action.card, state);
+    return executeCardAction(
+      state,
+      action.player.id,
+      action.card.id,
+      botAction.targetId,
+      botAction.secondTargetId,
+      botAction.decision,
     );
-    for (const card of cardsOfRank) {
-      activeCardsToExecute.push({ player, card });
-    }
   }
 
-  if (activeCardsToExecute.length === 0) {
-    // Move to next rank rank 1 -> 2 -> 3 -> 4
-    if (currentRank < 4) {
-      const nextRank = (currentRank + 1) as CardRank;
-      const rankNameMap: Record<number, string> = {
-        1: 'Do Thám',
-        2: 'Thần Thông',
-        3: 'Sát Thủ',
-        4: 'Vệ Sĩ & Mẹo Thuật',
-      };
-
-      const phaseLog: ActionLogEntry = {
-        id: `log-phase-${nextRank}-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString('vi-VN'),
-        phase: nextRank,
-        messageVi: `>>> Chuyển sang Giai Đoạn Tốc Độ ${nextRank}: Ninja ${rankNameMap[nextRank]} <<<`,
-        type: 'INFO',
-      };
-
-      return processNextExecutionStep({
-        ...state,
-        executionRank: nextRank,
-        executionStep: 0,
-        actionLogs: [phaseLog, ...state.actionLogs],
-      });
-    } else {
-      // Execution Phase finished for all Ranks! Evaluate Round End!
-      return evaluateRoundEnd(state);
-    }
+  const phaseIndex = NIGHT_PHASES.indexOf(state.executionPhase);
+  if (phaseIndex < NIGHT_PHASES.length - 1) {
+    const executionPhase = NIGHT_PHASES[phaseIndex + 1];
+    return processNextExecutionStep({
+      ...state,
+      executionPhase,
+      executionStep: 0,
+      actionLogs: [
+        logEntry(`Chuyển sang phase ${PHASE_LABELS[executionPhase]}.`, 'INFO', { phase: executionPhase }),
+        ...state.actionLogs,
+      ],
+    });
   }
-
-  // Handle the first card in activeCardsToExecute queue
-  const currentAction = activeCardsToExecute[0];
-  const actor = currentAction.player;
-  const card = currentAction.card;
-
-  // If actor is Bot, resolve Bot action automatically!
-  if (actor.isBot) {
-    const targetPlayer = chooseBotTarget(actor, card, state);
-    return executeCardAction(state, actor.id, card.id, targetPlayer?.id);
-  }
-
-  // If human, wait for user input or auto-prompt in UI.
-  return state;
+  return evaluateRoundEnd(state);
 }
 
 export function executeCardAction(
@@ -381,446 +251,363 @@ export function executeCardAction(
   actorId: string,
   cardId: string,
   targetId?: string,
-  secondTargetId?: string
+  secondTargetId?: string,
+  decision?: string,
 ): GameState {
-  let logs: ActionLogEntry[] = [...state.actionLogs];
+  if (state.status !== 'EXECUTION') return state;
+  const queuedAction = getNextAction(state);
+  if (!queuedAction || queuedAction.player.id !== actorId || queuedAction.card.id !== cardId) return state;
 
-  const actor = state.players.find((p) => p.id === actorId);
-  if (!actor || !actor.isAlive) return state;
-
-  const card = actor.selectedCards.find((c) => c.id === cardId);
-  if (!card) return state;
-
-  const updatedPlayers = state.players.map((p) => {
-    if (p.id === actorId) {
-      return {
-        ...p,
-        playedCardsThisPhase: [...p.playedCardsThisPhase, card],
-      };
-    }
-    return p;
-  });
-
-  const timestamp = new Date().toLocaleTimeString('vi-VN');
+  const actor = queuedAction.player;
+  const card = queuedAction.card;
   let nextState: GameState = {
     ...state,
-    players: updatedPlayers,
+    executionStep: state.executionStep + 1,
+    players: state.players.map((player) => player.id === actorId
+      ? { ...player, playedCardsThisPhase: [...player.playedCardsThisPhase, card] }
+      : player),
   };
+  const logs = [...nextState.actionLogs];
 
-  const addPrivateNotice = (message: string) => {
-    const existingNotices = nextState.privateNotices?.[actorId] || [];
-    nextState.privateNotices = {
-      ...nextState.privateNotices,
-      [actorId]: [message, ...existingNotices].slice(0, 5),
+  const addPrivateNotice = (playerId: string, message: string) => {
+    nextState = {
+      ...nextState,
+      privateNotices: {
+        ...nextState.privateNotices,
+        [playerId]: [message, ...(nextState.privateNotices?.[playerId] ?? [])].slice(0, 8),
+      },
     };
   };
 
-  const target = targetId ? updatedPlayers.find((p) => p.id === targetId) : null;
-  const secondTarget = secondTargetId ? updatedPlayers.find((p) => p.id === secondTargetId) : null;
+  const target = targetId ? nextState.players.find((player) => player.id === targetId && player.isAlive) : undefined;
+  const secondTarget = secondTargetId
+    ? nextState.players.find((player) => player.id === secondTargetId && player.isAlive)
+    : undefined;
+  const phase = card.phase ?? undefined;
 
-  // --- CARD EFFECT EXECUTION LOGIC ---
   switch (card.effectType) {
-    case 'SPY_HOUSE': {
-      if (target && target.house) {
+    case 'LOOK_HOUSE': {
+      if (target?.house) {
+        addPrivateNotice(actorId, `👁️ House của ${target.name}: ${target.house.nameVi} ${target.house.icon}.`);
+        logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] bí mật xem House của ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
+      }
+      break;
+    }
+    case 'LOOK_HOUSE_AND_NINJA': {
+      if (target?.house) {
+        const hiddenCards = target.selectedCards.filter((candidate) =>
+          !target.playedCardsThisPhase.some((played) => played.id === candidate.id));
+        const seenCard = hiddenCards[Math.floor(Math.random() * hiddenCards.length)];
         addPrivateNotice(
-          `👁️ ${target.name} thuộc ${target.house.nameVi} ${target.house.icon}.`
-        );
-        logs.unshift({
-          id: `log-act-${Date.now()}`,
-          timestamp,
-          phase: card.rank,
           actorId,
-          targetId: target.id,
-          messageVi: `${actor.name} dùng [${card.nameVi}] xem ngầm Thẻ Gia Tộc của ${target.name}.`,
-          type: 'ACTION',
-        });
+          `🔮 ${target.name}: ${target.house.nameVi}; Ninja card: ${seenCard?.nameVi ?? 'không còn lá chưa chơi'}.`,
+        );
+        logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] dò xét ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
       }
       break;
     }
-
-    case 'SPY_DECK': {
-      const previewCards = nextState.ninjaDeck.slice(0, 2);
-      addPrivateNotice(
-        previewCards.length > 0
-          ? `🃏 Hai lá tiếp theo: ${previewCards.map((previewCard) => previewCard.nameVi).join(' và ')}.`
-          : '🃏 Xấp bài không còn lá nào để xem.'
-      );
-      logs.unshift({
-        id: `log-act-${Date.now()}`,
-        timestamp,
-        phase: card.rank,
-        actorId,
-        messageVi: `${actor.name} dùng [${card.nameVi}] xem ngầm 2 lá bài tiếp theo trong xấp bài Ninja.`,
-        type: 'ACTION',
-      });
+    case 'SHAPESHIFTER': {
+      if (target?.house && secondTarget?.house && target.id !== secondTarget.id) {
+        addPrivateNotice(actorId, `🦊 ${target.name}: ${target.house.nameVi}; ${secondTarget.name}: ${secondTarget.house.nameVi}.`);
+        if (decision === 'SWAP') {
+          const firstHouse = target.house;
+          const secondHouse = secondTarget.house;
+          nextState.players = nextState.players.map((player) => {
+            if (player.id === target.id) return { ...player, house: secondHouse, unknownCurrentHouse: true, revealedHouse: false };
+            if (player.id === secondTarget.id) return { ...player, house: firstHouse, unknownCurrentHouse: true, revealedHouse: false };
+            return player;
+          });
+        }
+        logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] lên ${target.name} và ${secondTarget.name}. Quyết định tráo được giữ bí mật.`, 'ACTION', { phase, actorId }));
+      }
       break;
     }
-
-    case 'SPY_CLAN_CHECK': {
-      if (target && target.house) {
-        const isLotus = target.house.type === 'LOTUS';
+    case 'GRAVE_DIGGER': {
+      const visibleDiscard = nextState.ninjaDiscardPile.slice(0, 2);
+      const recovered = visibleDiscard.find((candidate) => candidate.id === targetId);
+      if (recovered) {
+        const recoveredPhaseIndex = recovered.phase ? NIGHT_PHASES.indexOf(recovered.phase) : -1;
+        const currentPhaseIndex = NIGHT_PHASES.indexOf(nextState.executionPhase);
+        const timingHasPassed = recovered.phase !== null && (
+          recoveredPhaseIndex < currentPhaseIndex ||
+          (recoveredPhaseIndex === currentPhaseIndex && (recovered.priority ?? 0) <= (card.priority ?? 0))
+        );
+        nextState.ninjaDiscardPile = nextState.ninjaDiscardPile.filter((candidate) => candidate.id !== recovered.id);
+        nextState.players = nextState.players.map((player) => player.id === actorId
+          ? {
+              ...player,
+              selectedCards: [...player.selectedCards, recovered],
+              playedCardsThisPhase: timingHasPassed
+                ? [...player.playedCardsThisPhase, recovered]
+                : player.playedCardsThisPhase,
+            }
+          : player);
         addPrivateNotice(
-          `🔎 ${target.name} ${isLotus ? 'THUỘC' : 'KHÔNG THUỘC'} Gia Tộc Hoa Sen.`
+          actorId,
+          `🪦 Bạn lấy [${recovered.nameVi}] từ chồng bài bỏ.${timingHasPassed ? ' Timing của lá này đã qua nên không thể dùng trong hiệp.' : ''}`,
         );
-        logs.unshift({
-          id: `log-act-${Date.now()}`,
-          timestamp,
-          phase: card.rank,
-          actorId,
-          targetId: target.id,
-          messageVi: `${actor.name} dùng [${card.nameVi}] bí mật dò hỏi ${target.name}.`,
-          type: 'ACTION',
-        });
+        logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] và lấy một Ninja card từ chồng bỏ.`, 'ACTION', { phase, actorId }));
       }
       break;
     }
-
-    case 'SWAP_HOUSE': {
-      if (target && secondTarget && target.house && secondTarget.house) {
-        const temp = target.house;
-        nextState.players = nextState.players.map((p) => {
-          if (p.id === target.id) return { ...p, house: secondTarget.house };
-          if (p.id === secondTarget.id) return { ...p, house: temp };
-          return p;
-        });
-
-        logs.unshift({
-          id: `log-act-${Date.now()}`,
-          timestamp,
-          phase: card.rank,
-          actorId,
-          messageVi: `${actor.name} dùng [${card.nameVi}] tráo đổi bí mật Thẻ Gia Tộc giữa ${target.name} và ${secondTarget.name}!`,
-          type: 'ACTION',
-        });
+    case 'TROUBLEMAKER': {
+      if (target?.house) {
+        addPrivateNotice(actorId, `🎭 House của ${target.name}: ${target.house.nameVi}.`);
+        if (decision === 'REVEAL') {
+          nextState.players = nextState.players.map((player) => player.id === target.id
+            ? { ...player, revealedHouse: true }
+            : player);
+          logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] công khai House của ${target.name}: ${target.house.nameVi}.`, 'REVEAL', { phase, actorId, targetId }));
+        } else {
+          logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] xem riêng House của ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
+        }
       }
       break;
     }
-
-    case 'FORCE_REVEAL': {
+    case 'SPIRIT_MERCHANT': {
       if (target) {
-        nextState.players = nextState.players.map((p) =>
-          p.id === target.id ? { ...p, revealedHouse: true } : p
-        );
-
-        logs.unshift({
-          id: `log-act-${Date.now()}`,
-          timestamp,
-          phase: card.rank,
-          actorId,
-          targetId: target.id,
-          messageVi: `${actor.name} dùng [${card.nameVi}] công khai Gia Tộc của ${target.name}: [${target.house?.nameVi}]!`,
-          type: 'REVEAL',
-        });
-      }
-      break;
-    }
-
-    case 'IRON_GUARD': {
-      nextState.players = nextState.players.map((p) =>
-        p.id === actorId ? { ...p, isProtected: true } : p
-      );
-
-      logs.unshift({
-        id: `log-act-${Date.now()}`,
-        timestamp,
-        phase: card.rank,
-        actorId,
-        messageVi: `${actor.name} kích hoạt [${card.nameVi}], lập một lá chắn thép vững chắc!`,
-        type: 'DEFENSE',
-      });
-      break;
-    }
-
-    case 'SUBSTITUTION': {
-      if (target) {
-        nextState.players = nextState.players.map((p) =>
-          p.id === actorId
-            ? { ...p, isProtected: true, substituteTargetId: target.id }
-            : p
-        );
-
-        logs.unshift({
-          id: `log-act-${Date.now()}`,
-          timestamp,
-          phase: card.rank,
-          actorId,
-          targetId: target.id,
-          messageVi: `${actor.name} dùng [${card.nameVi}], sẵn sàng chuyển dời đòn đánh sang ${target.name}!`,
-          type: 'DEFENSE',
-        });
-      }
-      break;
-    }
-
-    case 'RETALIATION': {
-      nextState.players = nextState.players.map((p) =>
-        p.id === actorId ? { ...p, retaliateOnDeath: true } : p
-      );
-
-      logs.unshift({
-        id: `log-act-${Date.now()}`,
-        timestamp,
-        phase: card.rank,
-        actorId,
-        messageVi: `${actor.name} cài bẫy [${card.nameVi}]: Nếu gục ngã sẽ lôi kẻ ám sát chết cùng!`,
-        type: 'DEFENSE',
-      });
-      break;
-    }
-
-    case 'ASSASSINATE':
-    case 'TWIN_BLADES':
-    case 'POISON_SHURIKEN': {
-      if (target) {
-        nextState = handleKillAttempt(nextState, actor, target, card, logs, timestamp);
-      }
-      break;
-    }
-
-    case 'HONOR_THIEF': {
-      if (target && target.honorTokens.length > 0) {
-        const stolenToken = target.honorTokens[0];
-        nextState.players = nextState.players.map((p) => {
-          if (p.id === target.id) {
-            return {
-              ...p,
-              honorTokens: p.honorTokens.slice(1),
-              totalScore: p.totalScore - stolenToken.value,
+        if (decision?.startsWith('HOUSE') && target.house) {
+          addPrivateNotice(actorId, `🪙 House của ${target.name}: ${target.house.nameVi}.`);
+        } else {
+          addPrivateNotice(actorId, `🪙 Honor token của ${target.name}: ${target.honorTokens[0]?.value ?? 'không có'}.`);
+        }
+        if (decision?.endsWith('SWAP') && actor.honorTokens.length > 0 && target.honorTokens.length > 0) {
+          const actorToken = actor.honorTokens[0];
+          const targetToken = target.honorTokens[0];
+          nextState.players = nextState.players.map((player) => {
+            if (player.id === actorId) return {
+              ...player,
+              honorTokens: [targetToken, ...player.honorTokens.slice(1)],
+              totalScore: player.totalScore - actorToken.value + targetToken.value,
             };
-          }
-          if (p.id === actorId) {
-            return {
-              ...p,
-              honorTokens: [...p.honorTokens, stolenToken],
-              totalScore: p.totalScore + stolenToken.value,
+            if (player.id === target.id) return {
+              ...player,
+              honorTokens: [actorToken, ...player.honorTokens.slice(1)],
+              totalScore: player.totalScore - targetToken.value + actorToken.value,
             };
-          }
-          return p;
-        });
-
-        logs.unshift({
-          id: `log-act-${Date.now()}`,
-          timestamp,
-          phase: card.rank,
-          actorId,
-          targetId: target.id,
-          messageVi: `${actor.name} dùng [${card.nameVi}] cướp 1 Thẻ Danh Dự từ ${target.name}!`,
-          type: 'HONOR',
-        });
+            return player;
+          });
+        }
+        logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] giao dịch bí mật với ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
       }
       break;
     }
+    case 'THIEF': {
+      nextState.players = nextState.players.map((player) => player.id === actorId ? { ...player, revealedHouse: true } : player);
+      const currentActor = nextState.players.find((player) => player.id === actorId)!;
+      const currentTarget = target ? nextState.players.find((player) => player.id === target.id) : undefined;
+      if (currentTarget && currentTarget.honorTokens.length > currentActor.honorTokens.length) {
+        const stolen = currentTarget.honorTokens[0];
+        nextState.players = nextState.players.map((player) => {
+          if (player.id === actorId) return { ...player, honorTokens: [...player.honorTokens, stolen], totalScore: player.totalScore + stolen.value };
+          if (player.id === currentTarget.id) return { ...player, honorTokens: player.honorTokens.slice(1), totalScore: player.totalScore - stolen.value };
+          return player;
+        });
+        logs.unshift(logEntry(`${actor.name} công khai House và dùng [${card.nameVi}] lấy 1 Honor token từ ${currentTarget.name}.`, 'HONOR', { phase, actorId, targetId }));
+      } else {
+        logs.unshift(logEntry(`${actor.name} công khai House khi dùng [${card.nameVi}], nhưng không có mục tiêu hợp lệ.`, 'REVEAL', { phase, actorId }));
+      }
+      break;
+    }
+    case 'JUDGE_KILL': {
+      nextState.players = nextState.players.map((player) => player.id === actorId ? { ...player, revealedHouse: true } : player);
+      logs.unshift(logEntry(`${actor.name} công khai House và tuyên án bằng [${card.nameVi}].`, 'REVEAL', { phase, actorId }));
+      if (target) nextState = resolveKill(nextState, actorId, target.id, card, logs, false);
+      break;
+    }
+    case 'BLIND_ASSASSIN_KILL': {
+      if (target) nextState = resolveKill(nextState, actorId, target.id, card, logs, true);
+      break;
+    }
+    case 'SHINOBI_KILL': {
+      if (target?.house) {
+        addPrivateNotice(actorId, `🥷 House của ${target.name}: ${target.house.nameVi}.`);
+        if (decision === 'KILL') nextState = resolveKill(nextState, actorId, target.id, card, logs, true);
+        else logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] kiểm tra rồi tha cho ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
+      }
+      break;
+    }
+    case 'MIRROR_MONK':
+    case 'MARTYR':
+    case 'MASTERMIND':
+      break;
   }
 
   nextState.actionLogs = logs;
   return processNextExecutionStep(nextState);
 }
 
-function handleKillAttempt(
+function resolveKill(
   state: GameState,
-  killer: Player,
-  victim: Player,
+  killerId: string,
+  victimId: string,
   card: NinjaCard,
   logs: ActionLogEntry[],
-  timestamp: string
+  reactionsAllowed: boolean,
 ): GameState {
-  let updatedState = { ...state };
+  const killer = state.players.find((player) => player.id === killerId);
+  const victim = state.players.find((player) => player.id === victimId);
+  if (!killer?.isAlive || !victim?.isAlive || killerId === victimId) return state;
+  let nextState = state;
 
-  // Check if victim has Iron Guard / Protection / Substitution
-  let actualVictim = victim;
-
-  if (victim.substituteTargetId) {
-    const subTarget = updatedState.players.find((p) => p.id === victim.substituteTargetId);
-    if (subTarget && subTarget.isAlive) {
-      logs.unshift({
-        id: `log-sub-${Date.now()}`,
-        timestamp,
-        messageVi: `🛡️ ${victim.name} dùng [Độn Thổ] né đòn! Đòn ám sát của ${killer.name} bị chuyển sang ${subTarget.name}!`,
-        type: 'DEFENSE',
-      });
-      actualVictim = subTarget;
-    }
-  }
-
-  if (actualVictim.isProtected) {
-    logs.unshift({
-      id: `log-block-${Date.now()}`,
-      timestamp,
-      messageVi: `🛡️ ${actualVictim.name} giơ [Khiên Thép] đỡ toàn bộ đòn [${card.nameVi}] từ ${killer.name}! KHÔNG AI BỊ TIÊU DIỆT!`,
-      type: 'DEFENSE',
-    });
-    return updatedState;
-  }
-
-  // Otherwise, actualVictim is KILLED!
-  updatedState.players = updatedState.players.map((p) => {
-    if (p.id === actualVictim.id) {
-      return {
-        ...p,
-        isAlive: false,
-        revealedHouse: true, // Reveal house when killed
+  if (reactionsAllowed) {
+    const mirrorMonk = victim.selectedCards.find((candidate) =>
+      candidate.effectType === 'MIRROR_MONK' &&
+      !victim.playedCardsThisPhase.some((played) => played.id === candidate.id));
+    if (mirrorMonk) {
+      nextState = {
+        ...nextState,
+        players: nextState.players.map((player) => {
+          if (player.id === victimId) return { ...player, playedCardsThisPhase: [...player.playedCardsThisPhase, mirrorMonk] };
+          if (player.id === killerId) return { ...player, isAlive: false };
+          return player;
+        }),
       };
+      logs.unshift(logEntry(`🪞 ${victim.name} lật [Mirror Monk]: phản đòn, ${killer.name} chết còn ${victim.name} sống.`, 'DEFENSE', { phase: card.phase ?? undefined, actorId: victimId, targetId: killerId }));
+      return nextState;
     }
-    if (p.id === killer.id) {
-      return {
-        ...p,
-        killsThisRound: p.killsThisRound + 1,
-      };
-    }
-    return p;
-  });
 
-  logs.unshift({
-    id: `log-kill-${Date.now()}`,
-    timestamp,
-    phase: card.rank,
-    actorId: killer.id,
-    targetId: actualVictim.id,
-    messageVi: `🗡️ ${killer.name} xuất chiêu [${card.nameVi}] HẠ GỤC ${actualVictim.name}! Thân phận lộ diện: [${actualVictim.house?.nameVi}].`,
-    type: 'KILL',
-  });
-
-  // Poison Shuriken bonus token
-  if (card.effectType === 'POISON_SHURIKEN' && updatedState.honorDeck.length > 0) {
-    const bonusToken = updatedState.honorDeck[0];
-    updatedState.honorDeck = updatedState.honorDeck.slice(1);
-    updatedState.players = updatedState.players.map((p) =>
-      p.id === killer.id
-        ? {
-            ...p,
-            honorTokens: [...p.honorTokens, bonusToken],
-            totalScore: p.totalScore + bonusToken.value,
-          }
-        : p
-    );
-
-    logs.unshift({
-      id: `log-poison-bonus-${Date.now()}`,
-      timestamp,
-      messageVi: `🎯 [Phi Tiêu Độc] hạ gục mục tiêu! ${killer.name} nhận thêm 1 Thẻ Danh Dự (+${bonusToken.value} điểm)!`,
-      type: 'HONOR',
-    });
-  }
-
-  // Retaliation trigger
-  if (actualVictim.retaliateOnDeath) {
-    logs.unshift({
-      id: `log-retal-${Date.now()}`,
-      timestamp,
-      messageVi: `💥 ${actualVictim.name} kích hoạt [Trả Thù] trước khi nhắm mắt! Tiêu diệt kẻ ám sát ${killer.name}!`,
-      type: 'KILL',
-    });
-
-    updatedState.players = updatedState.players.map((p) =>
-      p.id === killer.id
-        ? {
-            ...p,
+    const martyr = victim.selectedCards.find((candidate) =>
+      candidate.effectType === 'MARTYR' &&
+      !victim.playedCardsThisPhase.some((played) => played.id === candidate.id));
+    if (martyr) {
+      const reward = nextState.honorDeck[0];
+      nextState = {
+        ...nextState,
+        honorDeck: reward ? nextState.honorDeck.slice(1) : nextState.honorDeck,
+        players: nextState.players.map((player) => {
+          if (player.id === victimId) return {
+            ...player,
             isAlive: false,
-            revealedHouse: true,
-          }
-        : p
-    );
+            playedCardsThisPhase: [...player.playedCardsThisPhase, martyr],
+            honorTokens: reward ? [...player.honorTokens, reward] : player.honorTokens,
+            totalScore: player.totalScore + (reward?.value ?? 0),
+          };
+          if (player.id === killerId) return { ...player, killsThisRound: player.killsThisRound + 1 };
+          return player;
+        }),
+      };
+      logs.unshift(logEntry(`🕯️ ${victim.name} lật [Martyr]: vẫn chết nhưng nhận 1 Honor token. House không bị lộ.`, 'HONOR', { phase: card.phase ?? undefined, actorId: victimId }));
+      return nextState;
+    }
   }
 
-  return updatedState;
+  nextState = {
+    ...nextState,
+    players: nextState.players.map((player) => {
+      if (player.id === victimId) return { ...player, isAlive: false };
+      if (player.id === killerId) return { ...player, killsThisRound: player.killsThisRound + 1 };
+      return player;
+    }),
+  };
+  logs.unshift(logEntry(`🗡️ ${killer.name} dùng [${card.nameVi}] hạ gục ${victim.name}. House của người chết vẫn bí mật.`, 'KILL', { phase: card.phase ?? undefined, actorId: killerId, targetId: victimId }));
+  return nextState;
+}
+
+function compareHouseRanks(lotus: Player[], crane: Player[]): HouseType | 'DRAW' {
+  const lotusRanks = lotus.map((player) => player.house?.rank ?? 99).sort((a, b) => a - b);
+  const craneRanks = crane.map((player) => player.house?.rank ?? 99).sort((a, b) => a - b);
+  const comparisons = Math.max(lotusRanks.length, craneRanks.length);
+  for (let index = 0; index < comparisons; index += 1) {
+    if (lotusRanks[index] === undefined) return 'CRANE';
+    if (craneRanks[index] === undefined) return 'LOTUS';
+    if (lotusRanks[index] < craneRanks[index]) return 'LOTUS';
+    if (craneRanks[index] < lotusRanks[index]) return 'CRANE';
+  }
+  return 'DRAW';
 }
 
 export function evaluateRoundEnd(state: GameState): GameState {
-  const survivingPlayers = state.players.filter((p) => p.isAlive);
-  let summaryLogs: string[] = [];
-  let winningClan: HouseType | 'DRAW' | null = null;
+  const alive = state.players.filter((player) => player.isAlive);
+  const lotus = alive.filter((player) => player.house?.type === 'LOTUS');
+  const crane = alive.filter((player) => player.house?.type === 'CRANE');
+  let winningClan: HouseType | 'DRAW' = compareHouseRanks(lotus, crane);
+  let players = state.players.map((player) => player.isAlive ? { ...player, revealedHouse: true } : player);
+  const mastermindOwner = players.find((player) =>
+    player.isAlive && player.selectedCards.some((card) =>
+      card.effectType === 'MASTERMIND' &&
+      !player.playedCardsThisPhase.some((played) => played.id === card.id)));
 
-  // Count survivors by Clan
-  const lotusSurvivors = survivingPlayers.filter((p) => p.house?.type === 'LOTUS');
-  const craneSurvivors = survivingPlayers.filter((p) => p.house?.type === 'CRANE');
-  const roninSurvivors = survivingPlayers.filter((p) => p.house?.type === 'RONIN');
+  const summaryLogs = [
+    `TỔNG KẾT HIỆP ${state.currentRound}`,
+    `Hoa Sen sống sót: ${lotus.map((player) => player.house?.rank).join(', ') || 'không có'}.`,
+    `Chim Hạc sống sót: ${crane.map((player) => player.house?.rank).join(', ') || 'không có'}.`,
+  ];
 
-  summaryLogs.push(`TỔNG KẾT HIỆP ${state.currentRound}:`);
-  summaryLogs.push(`- Hoa Sen còn sống: ${lotusSurvivors.length} người.`);
-  summaryLogs.push(`- Chim Hạc còn sống: ${craneSurvivors.length} người.`);
-  summaryLogs.push(`- Lãng Khách còn sống: ${roninSurvivors.length} người.`);
-
-  // Determine winning clan
-  if (roninSurvivors.length > 0 && lotusSurvivors.length === 0 && craneSurvivors.length === 0) {
-    winningClan = 'RONIN';
-    summaryLogs.push(`🏆 Lãng Khách Ronin (${roninSurvivors.map((p) => p.name).join(', ')}) là người duy nhất sống sót và GIÀNH CHIẾN THẮNG HIP NÀY!`);
-  } else if (lotusSurvivors.length > craneSurvivors.length) {
-    winningClan = 'LOTUS';
-    summaryLogs.push(`🏆 Gia Tộc Hoa Sen chiến thắng Hiệp ${state.currentRound}!`);
-  } else if (craneSurvivors.length > lotusSurvivors.length) {
-    winningClan = 'CRANE';
-    summaryLogs.push(`🏆 Gia Tộc Chim Hạc chiến thắng Hiệp ${state.currentRound}!`);
-  } else if (lotusSurvivors.length > 0 && lotusSurvivors.length === craneSurvivors.length) {
-    winningClan = 'DRAW';
-    summaryLogs.push(`🤝 Cả hai Gia Tộc Hoa Sen và Chim Hạc đều có số người sống sót bằng nhau!`);
-  } else {
-    summaryLogs.push(`💀 Không ai sống sót trong đêm hỗn chiến này!`);
+  if (mastermindOwner) {
+    const mastermind = mastermindOwner.selectedCards.find((card) => card.effectType === 'MASTERMIND')!;
+    players = players.map((player) => player.id === mastermindOwner.id
+      ? { ...player, playedCardsThisPhase: [...player.playedCardsThisPhase, mastermind] }
+      : player);
+    winningClan = mastermindOwner.house?.type === 'RONIN' ? 'DRAW' : mastermindOwner.house?.type ?? 'DRAW';
+    summaryLogs.push(`🧠 ${mastermindOwner.name} lật Mastermind và thay đổi kết quả House Reveal.`);
   }
 
-  // Distribute Honor Tokens
-  let deck = [...state.honorDeck];
-  const updatedPlayers = state.players.map((player) => {
-    let earnedTokens: typeof deck = [];
+  if (winningClan === 'LOTUS') summaryLogs.push('🏆 Gia tộc Hoa Sen thắng hiệp.');
+  else if (winningClan === 'CRANE') summaryLogs.push('🏆 Gia tộc Chim Hạc thắng hiệp.');
+  else summaryLogs.push('🤝 Hai House hòa; mọi người còn sống nhận Honor.');
 
-    // Surviving members of winning clan get 1 token
-    const isSurvivingWinner =
-      player.isAlive &&
-      ((winningClan === 'LOTUS' && player.house?.type === 'LOTUS') ||
-        (winningClan === 'CRANE' && player.house?.type === 'CRANE') ||
-        (winningClan === 'DRAW' && (player.house?.type === 'LOTUS' || player.house?.type === 'CRANE')));
-
-    // Ronin sole survivor gets 2 tokens
-    const isRoninWinner = winningClan === 'RONIN' && player.isAlive && player.house?.type === 'RONIN';
-
-    let tokenCount = 0;
-    if (isRoninWinner) tokenCount = 2;
-    else if (isSurvivingWinner) tokenCount = 1;
-
-    for (let i = 0; i < tokenCount; i++) {
-      if (deck.length > 0) {
-        earnedTokens.push(deck[0]);
-        deck = deck.slice(1);
-      }
-    }
-
-    const newScore = player.totalScore + earnedTokens.reduce((sum, t) => sum + t.value, 0);
-
+  let honorDeck = [...state.honorDeck];
+  players = players.map((player) => {
+    const winsWithHouse = winningClan !== 'DRAW' && player.house?.type === winningClan;
+    const earnsDrawReward = winningClan === 'DRAW' && player.isAlive;
+    const earnsRoninReward = player.isAlive && player.house?.type === 'RONIN';
+    if (!winsWithHouse && !earnsDrawReward && !earnsRoninReward) return player;
+    const token = honorDeck.shift();
+    if (!token) return player;
     return {
       ...player,
-      revealedHouse: true, // Reveal everyone's house at round summary
-      honorTokens: [...player.honorTokens, ...earnedTokens],
-      totalScore: newScore,
+      honorTokens: [...player.honorTokens, token],
+      totalScore: player.totalScore + token.value,
     };
   });
 
-  const isGameOver = state.currentRound >= state.maxRounds;
-
-  const roundEndLog: ActionLogEntry = {
-    id: `log-round-end-${Date.now()}`,
-    timestamp: new Date().toLocaleTimeString('vi-VN'),
-    phase: 'ROUND_END',
-    messageVi: summaryLogs.join(' '),
-    type: 'HONOR',
-  };
+  const reachedThreshold = players.some((player) => player.totalScore >= 10);
+  const highScore = Math.max(...players.map((player) => player.totalScore));
+  const gameWinners = reachedThreshold
+    ? players.filter((player) => player.totalScore === highScore).map((player) => player.id)
+    : [];
+  if (reachedThreshold) {
+    summaryLogs.push(`🎖️ Trò chơi kết thúc ở mốc 10 điểm. Người thắng: ${players.filter((player) => gameWinners.includes(player.id)).map((player) => player.name).join(', ')}.`);
+  }
 
   return {
     ...state,
-    status: isGameOver ? 'GAME_OVER' : 'ROUND_SUMMARY',
-    players: updatedPlayers,
-    honorDeck: deck,
+    status: reachedThreshold ? 'GAME_OVER' : 'ROUND_SUMMARY',
+    players,
+    honorDeck,
     roundWinnerClan: winningClan,
     roundSummaryLogs: summaryLogs,
-    actionLogs: [roundEndLog, ...state.actionLogs],
+    gameWinners,
+    actionLogs: [logEntry(summaryLogs.join(' '), 'HONOR', { phase: 'ROUND_END' }), ...state.actionLogs],
   };
 }
 
-function chooseBotTarget(bot: Player, card: NinjaCard, state: GameState): Player | undefined {
-  const aliveOthers = state.players.filter((p) => p.isAlive && p.id !== bot.id);
-  if (aliveOthers.length === 0) return undefined;
+function chooseBotAction(bot: Player, card: NinjaCard, state: GameState): {
+  targetId?: string;
+  secondTargetId?: string;
+  decision?: string;
+} {
+  if (card.effectType === 'GRAVE_DIGGER') return { targetId: state.ninjaDiscardPile[0]?.id };
+  const others = state.players.filter((player) => player.isAlive && player.id !== bot.id);
+  const rival = others.find((player) => player.house?.type !== bot.house?.type) ?? others[0];
+  if (!rival) return {};
 
-  // Bot attempts to target rival clan
-  const botClan = bot.house?.type;
-  const targetRival = aliveOthers.find((p) => p.house?.type !== botClan);
-
-  return targetRival || aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+  if (card.effectType === 'SHAPESHIFTER') {
+    const second = others.find((player) => player.id !== rival.id) ?? bot;
+    return { targetId: rival.id, secondTargetId: second.id, decision: 'SWAP' };
+  }
+  if (card.effectType === 'TROUBLEMAKER') return { targetId: rival.id, decision: 'REVEAL' };
+  if (card.effectType === 'SPIRIT_MERCHANT') {
+    const canSwap = bot.honorTokens.length > 0 && rival.honorTokens.length > 0;
+    return { targetId: rival.id, decision: canSwap ? 'HONOR_SWAP' : 'HOUSE_KEEP' };
+  }
+  if (card.effectType === 'SHINOBI_KILL') {
+    return { targetId: rival.id, decision: rival.house?.type === bot.house?.type ? 'SPARE' : 'KILL' };
+  }
+  if (card.effectType === 'THIEF') {
+    const richTarget = others.find((player) => player.honorTokens.length > bot.honorTokens.length);
+    return { targetId: richTarget?.id };
+  }
+  return { targetId: rival.id };
 }

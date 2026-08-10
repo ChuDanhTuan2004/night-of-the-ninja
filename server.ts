@@ -74,12 +74,11 @@ app.post('/api/rooms/create', (req, res) => {
     isReady: true,
     house: null,
     revealedHouse: false,
+    unknownCurrentHouse: false,
     isAlive: true,
     draftHand: [],
     selectedCards: [],
     playedCardsThisPhase: [],
-    isProtected: false,
-    retaliateOnDeath: false,
     honorTokens: [],
     totalScore: 0,
     killsThisRound: 0,
@@ -101,12 +100,11 @@ app.post('/api/rooms/create', (req, res) => {
         isReady: true,
         house: null,
         revealedHouse: false,
+        unknownCurrentHouse: false,
         isAlive: true,
         draftHand: [],
         selectedCards: [],
         playedCardsThisPhase: [],
-        isProtected: false,
-        retaliateOnDeath: false,
         honorTokens: [],
         totalScore: 0,
         killsThisRound: 0,
@@ -151,12 +149,11 @@ app.post('/api/rooms/join', (req, res) => {
     isReady: true,
     house: null,
     revealedHouse: false,
+    unknownCurrentHouse: false,
     isAlive: true,
     draftHand: [],
     selectedCards: [],
     playedCardsThisPhase: [],
-    isProtected: false,
-    retaliateOnDeath: false,
     honorTokens: [],
     totalScore: 0,
     killsThisRound: 0,
@@ -191,12 +188,11 @@ app.post('/api/rooms/add-bot', (req, res) => {
     isReady: true,
     house: null,
     revealedHouse: false,
+    unknownCurrentHouse: false,
     isAlive: true,
     draftHand: [],
     selectedCards: [],
     playedCardsThisPhase: [],
-    isProtected: false,
-    retaliateOnDeath: false,
     honorTokens: [],
     totalScore: 0,
     killsThisRound: 0,
@@ -244,13 +240,14 @@ app.post('/api/rooms/start', (req, res) => {
 
 // Game Action
 app.post('/api/rooms/action', (req, res) => {
-  const { roomCode, actionType, playerId, cardId, targetId, secondTargetId } = req.body as {
+  const { roomCode, actionType, playerId, cardId, targetId, secondTargetId, decision } = req.body as {
     roomCode: string;
     actionType: 'DRAFT' | 'EXECUTE_CARD' | 'NEXT_ROUND';
     playerId: string;
     cardId?: string;
     targetId?: string;
     secondTargetId?: string;
+    decision?: string;
   };
 
   const code = roomCode?.toUpperCase();
@@ -261,13 +258,9 @@ app.post('/api/rooms/action', (req, res) => {
   if (actionType === 'DRAFT' && cardId) {
     room = handleDraftPick(room, playerId, cardId);
   } else if (actionType === 'EXECUTE_CARD' && cardId) {
-    room = executeCardAction(room, playerId, cardId, targetId, secondTargetId);
+    room = executeCardAction(room, playerId, cardId, targetId, secondTargetId, decision);
   } else if (actionType === 'NEXT_ROUND') {
-    if (room.currentRound < room.maxRounds) {
-      room = startRound(room, room.currentRound + 1);
-    } else {
-      room.status = 'GAME_OVER';
-    }
+    if (room.status === 'ROUND_SUMMARY') room = startRound(room, room.currentRound + 1);
   }
 
   rooms.set(code, room);

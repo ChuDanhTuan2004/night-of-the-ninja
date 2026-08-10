@@ -22,7 +22,6 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
   const [isConfirming, setIsConfirming] = useState(false);
   const confirmTimerRef = useRef<number | null>(null);
 
-  const passDirectionVi = gameState.currentRound % 2 !== 0 ? 'TRÁI ⬅️' : 'PHẢI ➡️';
   const pickedCount = currentPlayer.selectedCards.length;
   const draftPickNumber = gameState.draftPickNumber || 1;
   const needPickCount = Math.max(0, 2 - pickedCount);
@@ -33,7 +32,7 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
     !hasPickedCurrentStage &&
     currentPlayer.draftHand.length === 2;
   const handKey = currentPlayer.draftHand.map((card) => card.id).join('-') || 'empty';
-  const receiveOffset = gameState.currentRound % 2 !== 0 ? 96 : -96;
+  const receiveOffset = 96;
 
   useEffect(() => {
     setSelectedCardId(null);
@@ -93,7 +92,7 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
               : hasPickedCurrentStage
               ? 'Đang Chờ Những Ninja Khác Chọn Lá'
               : draftPickNumber === 1
-              ? `Chọn 1 Lá & Chuyển 2 Lá Sang Bên ${passDirectionVi}`
+              ? 'Chọn 1 Lá & Chuyển 2 Lá Sang Trái ⬅️'
               : 'Nhận 2 Lá • Chọn 1 Lá, Bỏ 1 Lá'}
           </h2>
           <p className="text-xs text-secondary mt-1">

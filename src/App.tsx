@@ -15,7 +15,7 @@ import {
 } from './utils/gameEngine';
 import { AVATARS, BOT_NAMES } from './data/cards';
 
-const SESSION_STORAGE_KEY = 'night-of-the-ninja-session-v2';
+const SESSION_STORAGE_KEY = 'night-of-the-ninja-session-v3';
 
 interface PersistedSession {
   gameState: GameState | null;
@@ -120,12 +120,11 @@ export default function App() {
         isReady: true,
         house: null,
         revealedHouse: false,
+        unknownCurrentHouse: false,
         isAlive: true,
         draftHand: [],
         selectedCards: [],
         playedCardsThisPhase: [],
-        isProtected: false,
-        retaliateOnDeath: false,
         honorTokens: [],
         totalScore: 0,
         killsThisRound: 0,
@@ -143,12 +142,11 @@ export default function App() {
             isReady: true,
             house: null,
             revealedHouse: false,
+            unknownCurrentHouse: false,
             isAlive: true,
             draftHand: [],
             selectedCards: [],
             playedCardsThisPhase: [],
-            isProtected: false,
-            retaliateOnDeath: false,
             honorTokens: [],
             totalScore: 0,
             killsThisRound: 0,
@@ -219,12 +217,11 @@ export default function App() {
         isReady: true,
         house: null,
         revealedHouse: false,
+        unknownCurrentHouse: false,
         isAlive: true,
         draftHand: [],
         selectedCards: [],
         playedCardsThisPhase: [],
-        isProtected: false,
-        retaliateOnDeath: false,
         honorTokens: [],
         totalScore: 0,
         killsThisRound: 0,
@@ -328,7 +325,8 @@ export default function App() {
   const handleExecuteCardAction = async (
     cardId: string,
     targetId?: string,
-    secondTargetId?: string
+    secondTargetId?: string,
+    decision?: string
   ) => {
     if (!gameState || !myPlayerId || pendingAction) return;
 
@@ -348,6 +346,7 @@ export default function App() {
             cardId,
             targetId,
             secondTargetId,
+            decision,
           }),
         });
         const data = await res.json();
@@ -366,7 +365,8 @@ export default function App() {
         actorId,
         cardId,
         targetId,
-        secondTargetId
+        secondTargetId,
+        decision
       );
       setGameState(nextState);
       setPendingAction(null);
@@ -394,12 +394,8 @@ export default function App() {
         console.error(e);
       }
     } else {
-      if (gameState.currentRound < gameState.maxRounds) {
-        const nextState = startRound(gameState, gameState.currentRound + 1);
-        setGameState(nextState);
-      } else {
-        setGameState({ ...gameState, status: 'GAME_OVER' });
-      }
+      const nextState = startRound(gameState, gameState.currentRound + 1);
+      setGameState(nextState);
     }
   };
 
@@ -432,7 +428,6 @@ export default function App() {
       <Header
         roomCode={gameState?.roomCode}
         currentRound={gameState?.currentRound}
-        maxRounds={gameState?.maxRounds}
         onOpenRules={() => setIsRulesOpen(true)}
         onReturnLobby={handleReturnLobby}
       />

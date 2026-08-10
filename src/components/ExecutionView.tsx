@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Sword, Shield, Eye, Skull, Crosshair, Sparkles, Scroll } from 'lucide-react';
-import { GameState, Player, NinjaCard, CardRank } from '../types/game';
-import { NinjaCardView, HouseCardView } from './NinjaCardView';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Crosshair, Scroll, Sparkles } from 'lucide-react';
+import { GameState, NinjaCard, NinjaPhase, Player } from '../types/game';
 import { sounds } from '../utils/audio';
 
 interface ExecutionViewProps {
@@ -11,16 +10,39 @@ interface ExecutionViewProps {
   onExecuteCardAction: (
     cardId: string,
     targetId?: string,
-    secondTargetId?: string
+    secondTargetId?: string,
+    decision?: string,
   ) => void;
 }
 
-const RANK_STEPS: { rank: CardRank; labelVi: string; icon: string }[] = [
-  { rank: 1, labelVi: 'P1: Do Thám', icon: '👁️' },
-  { rank: 2, labelVi: 'P2: Thần Thông', icon: '🔮' },
-  { rank: 3, labelVi: 'P3: Sát Thủ', icon: '🗡️' },
-  { rank: 4, labelVi: 'P4: Vệ Sĩ & Mẹo', icon: '🛡️' },
+const PHASE_STEPS: { phase: NinjaPhase; labelVi: string; icon: string }[] = [
+  { phase: 'SPY', labelVi: 'Do thám', icon: '👁️' },
+  { phase: 'MYSTIC', labelVi: 'Thần bí', icon: '🔮' },
+  { phase: 'TRICKSTER', labelVi: 'Mưu sĩ', icon: '🎭' },
+  { phase: 'BLIND_ASSASSIN', labelVi: 'Sát thủ mù', icon: '🗡️' },
+  { phase: 'SHINOBI', labelVi: 'Shinobi', icon: '🥷' },
 ];
+
+const DECISIONS: Partial<Record<NinjaCard['effectType'], { value: string; label: string }[]>> = {
+  SHAPESHIFTER: [
+    { value: 'KEEP', label: 'Giữ nguyên hai House' },
+    { value: 'SWAP', label: 'Tráo hai House' },
+  ],
+  TROUBLEMAKER: [
+    { value: 'KEEP', label: 'Giữ thông tin bí mật' },
+    { value: 'REVEAL', label: 'Công khai House' },
+  ],
+  SPIRIT_MERCHANT: [
+    { value: 'HOUSE_KEEP', label: 'Xem House · Không đổi token' },
+    { value: 'HOUSE_SWAP', label: 'Xem House · Đổi token' },
+    { value: 'HONOR_KEEP', label: 'Xem Honor · Không đổi token' },
+    { value: 'HONOR_SWAP', label: 'Xem Honor · Đổi token' },
+  ],
+  SHINOBI_KILL: [
+    { value: 'SPARE', label: 'Tha mục tiêu' },
+    { value: 'KILL', label: 'Giết mục tiêu' },
+  ],
+};
 
 export const ExecutionView: React.FC<ExecutionViewProps> = ({
   gameState,
@@ -29,198 +51,140 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
 }) => {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [secondTargetId, setSecondTargetId] = useState<string | null>(null);
-  const [activeCardToTarget, setActiveCardToTarget] = useState<NinjaCard | null>(null);
+  const [decision, setDecision] = useState<string | null>(null);
+  const [activeCard, setActiveCard] = useState<NinjaCard | null>(null);
 
-  // Find human's unplayed card for current execution rank
-  const humanCardToPlay = currentPlayer.isAlive
-    ? currentPlayer.selectedCards.find(
-        (c) =>
-          c.rank === gameState.executionRank &&
-          !currentPlayer.playedCardsThisPhase.some((p) => p.id === c.id)
-      )
-    : null;
+  const queuedAction = useMemo(() => {
+    const queue = gameState.players.flatMap((player, playerIndex) => {
+      if (!player.isAlive) return [];
+      return player.selectedCards
+        .filter((card) =>
+          card.phase === gameState.executionPhase &&
+          !player.playedCardsThisPhase.some((played) => played.id === card.id))
+        .map((card) => ({ player, playerIndex, card }));
+    });
+    queue.sort((a, b) => (a.card.priority ?? 99) - (b.card.priority ?? 99) || a.playerIndex - b.playerIndex);
+    return queue[0] ?? null;
+  }, [gameState.executionPhase, gameState.players]);
 
-  const handleStartCardTargeting = (card: NinjaCard) => {
-    setActiveCardToTarget(card);
+  const humanCardToPlay = queuedAction?.player.id === currentPlayer.id ? queuedAction.card : null;
+  const phaseIndex = PHASE_STEPS.findIndex((step) => step.phase === gameState.executionPhase);
+  const target = gameState.players.find((player) => player.id === selectedTargetId);
+  const secondTarget = gameState.players.find((player) => player.id === secondTargetId);
+  const decisionOptions = activeCard ? DECISIONS[activeCard.effectType] : undefined;
+
+  const resetPicker = () => {
+    setActiveCard(null);
     setSelectedTargetId(null);
     setSecondTargetId(null);
+    setDecision(null);
+  };
 
-    // If card doesn't require target (like Iron Guard or Retaliation), execute immediately!
-    if (!card.requiresTarget) {
-      if (card.rank === 3) sounds.playSlash();
-      else if (card.rank === 4) sounds.playShield();
-      else sounds.playSpyWhisper();
+  const startTargeting = (card: NinjaCard) => {
+    setActiveCard(card);
+    setSelectedTargetId(null);
+    setSecondTargetId(null);
+    setDecision(null);
+  };
 
-      onExecuteCardAction(card.id);
-      setActiveCardToTarget(null);
+  const confirmAction = () => {
+    if (!activeCard) return;
+    if (activeCard.phase === 'BLIND_ASSASSIN' || (activeCard.effectType === 'SHINOBI_KILL' && decision === 'KILL')) {
+      sounds.playSlash();
+    } else {
+      sounds.playSpyWhisper();
     }
-  };
-
-  const handleConfirmTargetAction = () => {
-    if (!activeCardToTarget) return;
-
-    if (activeCardToTarget.rank === 3) sounds.playSlash();
-    else if (activeCardToTarget.rank === 4) sounds.playShield();
-    else sounds.playSpyWhisper();
-
     onExecuteCardAction(
-      activeCardToTarget.id,
-      selectedTargetId || undefined,
-      secondTargetId || undefined
+      activeCard.id,
+      selectedTargetId ?? undefined,
+      secondTargetId ?? undefined,
+      decision ?? undefined,
     );
-
-    setActiveCardToTarget(null);
-    setSelectedTargetId(null);
-    setSecondTargetId(null);
+    resetPicker();
   };
 
-  const alivePlayersCount = gameState.players.filter((p) => p.isAlive).length;
+  const isGraveDigger = activeCard?.effectType === 'GRAVE_DIGGER';
+  const visibleDiscard = gameState.ninjaDiscardPile.slice(0, 2);
+  const needsSecondTarget = activeCard?.targetType === 'TWO_PLAYERS';
+  const targetReady = isGraveDigger ? Boolean(selectedTargetId) || visibleDiscard.length === 0 : Boolean(selectedTargetId);
+  const canConfirm = targetReady && (!needsSecondTarget || Boolean(secondTargetId)) && (!decisionOptions || Boolean(decision));
 
   return (
     <div className="game-container-wide screen-stack">
-      {/* Execution Rank Timeline Bar */}
       <div className="game-card game-card-section">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3 mb-3">
           <div className="flex items-center space-x-2">
             <Sparkles className="w-5 h-5" />
-            <h2 className="phase-title">
-              Đêm Hành Động • Tiến Trình Tốc Độ
-            </h2>
+            <h2 className="phase-title">Đêm · Resolve theo priority 1 → 6</h2>
           </div>
-          <div className="badge">
-            Ninja Còn Sống: <strong>{alivePlayersCount}/{gameState.players.length}</strong>
-          </div>
+          <div className="badge">Còn sống: <strong>{gameState.players.filter((player) => player.isAlive).length}/{gameState.players.length}</strong></div>
         </div>
-
         <div className="phase-track">
-          {RANK_STEPS.map((step) => {
-            const isActive = gameState.executionRank === step.rank;
-            const isPassed = gameState.executionRank > step.rank;
-
-            return (
-              <div
-                key={step.rank}
-                className={`phase-step ${isActive ? 'is-active' : ''} ${isPassed ? 'is-complete' : ''}`}
-              >
-                <span className="text-lg">{step.icon}</span>
-                <span className="text-xs font-bold font-mono tracking-wider">{step.labelVi}</span>
-              </div>
-            );
-          })}
+          {PHASE_STEPS.map((step, index) => (
+            <div
+              key={step.phase}
+              className={`phase-step ${index === phaseIndex ? 'is-active' : ''} ${index < phaseIndex ? 'is-complete' : ''}`}
+            >
+              <span className="text-lg">{step.icon}</span>
+              <span className="text-xs font-bold tracking-wider">{step.labelVi}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Main Execution Split View: Player Table vs Battle Logs */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Player Table Grid */}
         <div className="lg:col-span-2 space-y-4">
           {gameState.privateNotices?.[currentPlayer.id]?.[0] && (
             <div role="status" className="status-panel">
-              <div className="eyebrow mb-1">
-                Thông Tin Bí Mật • Chỉ Bạn Biết
-              </div>
-              <p className="text-sm text-white">
-                {gameState.privateNotices[currentPlayer.id][0]}
-              </p>
+              <div className="eyebrow mb-1">Thông tin bí mật · Chỉ bạn biết</div>
+              <p className="text-sm text-white">{gameState.privateNotices[currentPlayer.id][0]}</p>
             </div>
           )}
+
           <div className="game-card game-card-section">
-            <h3 className="section-title mb-4">
-              <Crosshair className="w-5 h-5" />
-              <span>Toàn Bàn Ninja ({gameState.players.length} Nhân Vật)</span>
-            </h3>
-
+            <h3 className="section-title mb-4"><Crosshair className="w-5 h-5" /> Toàn bàn</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {gameState.players.map((p) => {
-                const isCurrentHuman = p.id === currentPlayer.id;
-
-                return (
-                  <div
-                    key={p.id}
-                    className={`player-card flex-col items-stretch justify-between ${!p.isAlive ? 'is-eliminated' : ''} ${isCurrentHuman ? 'is-current' : ''}`}
-                  >
-                    {/* Top Status & Avatar */}
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="avatar relative">
-                        {p.avatar}
-                        {!p.isAlive && (
-                          <div className="absolute -top-1 -right-1 text-xs">💀</div>
-                        )}
-                      </div>
-
-                      <div className="truncate">
-                        <div className="player-card-name">
-                          {p.name} {isCurrentHuman && '(Bạn)'}
-                        </div>
-                        <div className="player-card-status flex items-center space-x-1">
-                          {p.isAlive ? (
-                            <span>● Còn Sống</span>
-                          ) : (
-                            <span>✖ Đã Gục Ngã</span>
-                          )}
-                        </div>
-                      </div>
+              {gameState.players.map((player) => (
+                <div
+                  key={player.id}
+                  className={`player-card flex-col items-stretch ${!player.isAlive ? 'is-eliminated' : ''} ${player.id === currentPlayer.id ? 'is-current' : ''}`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="avatar relative">{player.avatar}{!player.isAlive && <span className="absolute -top-1 -right-1 text-xs">💀</span>}</div>
+                    <div className="truncate">
+                      <div className="player-card-name">{player.name}{player.id === currentPlayer.id ? ' (Bạn)' : ''}</div>
+                      <div className="player-card-status">{player.isAlive ? '● Còn sống' : '✖ Đã gục ngã'}</div>
                     </div>
-
-                    {/* House Card Reveal Status */}
-                    {p.revealedHouse && p.house ? (
-                      <div className="badge rounded-lg justify-center">
-                        <span>{p.house.icon}</span>
-                        <span className="truncate">{p.house.nameVi}</span>
-                      </div>
-                    ) : (
-                      <div className="player-card-status text-center">
-                        🔒 Thân Phận Mật
-                      </div>
-                    )}
                   </div>
-                );
-              })}
+                  {player.revealedHouse && player.house ? (
+                    <div className="badge rounded-lg justify-center">{player.house.icon} {player.house.nameVi}</div>
+                  ) : (
+                    <div className="player-card-status text-center">🔒 House bí mật</div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Current Human Action Control Panel */}
-          {currentPlayer.isAlive && humanCardToPlay && (
-            <motion.div
-              initial={{ scale: 0.98, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="game-card is-active game-card-section flex flex-col md:flex-row md:items-center justify-between gap-4"
-            >
+          {currentPlayer.isAlive && humanCardToPlay ? (
+            <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card is-active game-card-section flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <div className="eyebrow">
-                  ĐẾN LƯỢT BẠN XUẤT CHIÊU!
-                </div>
-                <h3 className="section-title text-xl mt-1">
-                  Lá Bài [P{humanCardToPlay.rank} - {humanCardToPlay.nameVi}]
-                </h3>
-                <p className="text-xs text-secondary mt-1 max-w-md">
-                  {humanCardToPlay.descriptionVi}
-                </p>
+                <div className="eyebrow">Đến lượt bạn · Priority {humanCardToPlay.priority}</div>
+                <h3 className="section-title text-xl mt-1">{humanCardToPlay.icon} {humanCardToPlay.nameVi}</h3>
+                <p className="text-xs text-secondary mt-1 max-w-md">{humanCardToPlay.descriptionVi}</p>
               </div>
-
-              <button
-                onClick={() => handleStartCardTargeting(humanCardToPlay)}
-                className="btn btn-primary btn-cta md:w-auto shrink-0"
-              >
-                ⚡ Kích Hoạt Kỹ Năng Ngay!
-              </button>
+              <button onClick={() => startTargeting(humanCardToPlay)} className="btn btn-primary btn-cta md:w-auto shrink-0">Kích hoạt kỹ năng</button>
             </motion.div>
-          )}
+          ) : queuedAction ? (
+            <div className="status-panel text-sm text-secondary">Đang chờ {queuedAction.player.name} xử lý lá priority {queuedAction.card.priority}…</div>
+          ) : null}
         </div>
 
-        {/* Right Col: Live Battle Action Log */}
         <div className="game-card game-card-section flex flex-col h-[520px]">
-          <h3 className="section-title mb-3 border-b border-white/10 pb-2">
-            <Scroll className="w-5 h-5" />
-            <span>Nhật Ký Đêm Đấu ({gameState.actionLogs.length})</span>
-          </h3>
-
+          <h3 className="section-title mb-3 border-b border-white/10 pb-2"><Scroll className="w-5 h-5" /> Nhật ký đêm</h3>
           <div className="game-log flex-1 overflow-y-auto pr-1">
             {gameState.actionLogs.map((log) => (
-              <div
-                key={log.id}
-                className={`game-log-entry ${['KILL', 'DEFENSE', 'REVEAL', 'HONOR'].includes(log.type) ? 'is-important' : ''}`}
-              >
+              <div key={log.id} className={`game-log-entry ${['KILL', 'DEFENSE', 'REVEAL', 'HONOR'].includes(log.type) ? 'is-important' : ''}`}>
                 <div className="text-xs text-muted mb-1">{log.timestamp}</div>
                 <div>{log.messageVi}</div>
               </div>
@@ -229,93 +193,75 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         </div>
       </div>
 
-      {/* Target Picker Modal */}
       <AnimatePresence>
-        {activeCardToTarget && activeCardToTarget.requiresTarget && (
+        {activeCard && (
           <div className="modal-overlay">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bottom-sheet max-w-lg space-y-5"
-            >
+            <motion.div initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.94, opacity: 0 }} className="bottom-sheet max-w-lg space-y-5">
               <div className="text-center space-y-1">
-                <div className="eyebrow">
-                  CHỌN MỤC TIÊU CHO KỸ NĂNG
-                </div>
-                <h3 className="phase-title">
-                  [{activeCardToTarget.nameVi}]
-                </h3>
-                <p className="text-xs text-secondary">{activeCardToTarget.descriptionVi}</p>
+                <div className="eyebrow">Priority {activeCard.priority} · {activeCard.phaseNameVi}</div>
+                <h3 className="phase-title">{activeCard.icon} {activeCard.nameVi}</h3>
+                <p className="text-xs text-secondary">{activeCard.descriptionVi}</p>
               </div>
 
-              {/* Target List Selection */}
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                <label className="form-label">
-                  {activeCardToTarget.effectType === 'SWAP_HOUSE'
-                    ? 'Chọn Người Chơi Thứ 1:'
-                    : 'Chọn Mục Tiêu:'}
-                </label>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {gameState.players
-                    .filter((p) => p.isAlive && p.id !== currentPlayer.id)
-                    .map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => setSelectedTargetId(p.id)}
-                        className={`player-card ${selectedTargetId === p.id ? 'is-selected' : ''}`}
-                      >
-                        <span className="text-xl">{p.avatar}</span>
-                        <span className="text-xs truncate">{p.name}</span>
-                      </button>
-                    ))}
+              {isGraveDigger ? (
+                <div className="space-y-2">
+                  <label className="form-label">Hai lá trên chồng bỏ</label>
+                  {visibleDiscard.length ? visibleDiscard.map((card) => (
+                    <button key={card.id} onClick={() => setSelectedTargetId(card.id)} className={`player-card w-full ${selectedTargetId === card.id ? 'is-selected' : ''}`}>
+                      <span className="text-xl">{card.icon}</span><span className="text-sm">{card.nameVi} · {card.phaseNameVi} {card.priority ?? ''}</span>
+                    </button>
+                  )) : <p className="status-panel text-sm">Chồng bài bỏ đang trống. Kỹ năng không lấy được lá nào.</p>}
                 </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  <label className="form-label">{needsSecondTarget ? 'Mục tiêu thứ nhất' : 'Chọn mục tiêu'}</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {gameState.players
+                      .filter((player) => player.isAlive && (activeCard.effectType === 'SHAPESHIFTER' || player.id !== currentPlayer.id))
+                      .filter((player) => activeCard.effectType !== 'THIEF' || player.honorTokens.length > currentPlayer.honorTokens.length)
+                      .map((player) => (
+                        <button key={player.id} onClick={() => { setSelectedTargetId(player.id); setSecondTargetId(null); setDecision(null); }} className={`player-card ${selectedTargetId === player.id ? 'is-selected' : ''}`}>
+                          <span className="text-xl">{player.avatar}</span><span className="text-xs truncate">{player.name}</span>
+                        </button>
+                      ))}
+                  </div>
 
-                {/* If SWAP_HOUSE requires 2 targets */}
-                {activeCardToTarget.effectType === 'SWAP_HOUSE' && selectedTargetId && (
-                  <div className="mt-4 space-y-2">
-                    <label className="form-label">
-                      Chọn Người Chơi Thứ 2 Để Tráo Đổi:
-                    </label>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {gameState.players
-                        .filter((p) => p.isAlive && p.id !== selectedTargetId)
-                        .map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() => setSecondTargetId(p.id)}
-                            className={`player-card ${secondTargetId === p.id ? 'is-selected' : ''}`}
-                          >
-                            <span className="text-xl">{p.avatar}</span>
-                            <span className="text-xs truncate">{p.name}</span>
+                  {needsSecondTarget && selectedTargetId && (
+                    <div className="pt-3 space-y-2">
+                      <label className="form-label">Mục tiêu thứ hai</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {gameState.players.filter((player) => player.isAlive && player.id !== selectedTargetId).map((player) => (
+                          <button key={player.id} onClick={() => { setSecondTargetId(player.id); setDecision(null); }} className={`player-card ${secondTargetId === player.id ? 'is-selected' : ''}`}>
+                            <span className="text-xl">{player.avatar}</span><span className="text-xs truncate">{player.name}</span>
                           </button>
                         ))}
+                      </div>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {activeCard.effectType === 'SHAPESHIFTER' && target?.house && secondTarget?.house && (
+                <div className="status-panel text-sm">Bạn thấy: <strong>{target.name}</strong> là {target.house.nameVi}; <strong>{secondTarget.name}</strong> là {secondTarget.house.nameVi}.</div>
+              )}
+              {['TROUBLEMAKER', 'SHINOBI_KILL'].includes(activeCard.effectType) && target?.house && (
+                <div className="status-panel text-sm">Bạn thấy House của <strong>{target.name}</strong>: {target.house.icon} <strong>{target.house.nameVi}</strong>.</div>
+              )}
+
+              {decisionOptions && targetReady && (!needsSecondTarget || secondTargetId) && (
+                <div className="space-y-2">
+                  <label className="form-label">Quyết định bí mật của bạn</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {decisionOptions.map((option) => (
+                      <button key={option.value} onClick={() => setDecision(option.value)} className={`btn ${decision === option.value ? 'btn-primary' : 'btn-secondary'}`}>{option.label}</button>
+                    ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Confirm / Cancel Buttons */}
               <div className="flex items-center space-x-3 pt-2">
-                <button
-                  onClick={() => setActiveCardToTarget(null)}
-                  className="btn btn-secondary flex-1"
-                >
-                  Hủy Chiêu
-                </button>
-
-                <button
-                  onClick={handleConfirmTargetAction}
-                  disabled={
-                    !selectedTargetId ||
-                    (activeCardToTarget.effectType === 'SWAP_HOUSE' && !secondTargetId)
-                  }
-                  className="btn btn-primary flex-1"
-                >
-                  Xác Nhận Xuất Chiêu!
-                </button>
+                <button onClick={resetPicker} className="btn btn-secondary flex-1">Hủy</button>
+                <button onClick={confirmAction} disabled={!canConfirm} className="btn btn-primary flex-1">Xác nhận</button>
               </div>
             </motion.div>
           </div>
