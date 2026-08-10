@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Award, Trophy, Play, Users, Sparkles, RefreshCw } from 'lucide-react';
+import { Trophy, Play, Sparkles, RefreshCw, HelpCircle, ScrollText, X } from 'lucide-react';
 import { GameState } from '../types/game';
 import { sounds } from '../utils/audio';
 
@@ -15,6 +15,8 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
   onNextRound,
   onReturnLobby,
 }) => {
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
   useEffect(() => {
     sounds.playVictoryGong();
     sounds.playTokenChime();
@@ -33,17 +35,62 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
     }
   }, []);
 
+  useEffect(() => {
+    if (!isHistoryOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsHistoryOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isHistoryOpen]);
+
   const sortedPlayers = [...gameState.players].sort((a, b) => b.totalScore - a.totalScore);
   const winners = sortedPlayers.filter((player) => gameState.gameWinners?.includes(player.id));
   const isGameOver = gameState.status === 'GAME_OVER';
+  const roundStartIndex = gameState.actionLogs.findIndex(
+    (log) =>
+      log.phase === 'ROUND_START' &&
+      log.messageVi.includes(`HIỆP ${gameState.currentRound}`),
+  );
+  const currentRoundLogs = (
+    roundStartIndex >= 0
+      ? gameState.actionLogs.slice(0, roundStartIndex + 1)
+      : gameState.actionLogs
+  ).toReversed();
+
+  const phaseLabel = (phase: (typeof gameState.actionLogs)[number]['phase']) => {
+    if (!phase) return 'Hệ thống';
+    const labels: Record<string, string> = {
+      ROUND_START: 'Bắt đầu hiệp',
+      DRAFT: 'Draft',
+      SPY: 'Spy',
+      MYSTIC: 'Mystic',
+      TRICKSTER: 'Trickster',
+      BLIND_ASSASSIN: 'Blind Assassin',
+      SHINOBI: 'Shinobi',
+      ROUND_END: 'House Reveal',
+    };
+    return labels[phase] ?? phase;
+  };
 
   return (
     <div className="game-container screen-stack min-h-[calc(100vh-140px)] justify-center">
       {/* Round / Game End Banner */}
       <div className="game-card game-card-section text-center space-y-3">
-        <div className="badge badge-primary">
-          <Sparkles className="w-4 h-4" />
-          <span>{isGameOver ? 'KẾT THÚC TRẬN ĐẤU · MỐC 10 ĐIỂM' : `KẾT THÚC HIỆP ${gameState.currentRound}`}</span>
+        <div className="inline-flex items-center justify-center gap-2">
+          <div className="badge badge-primary">
+            <Sparkles className="w-4 h-4" />
+            <span>{isGameOver ? 'KẾT THÚC TRẬN ĐẤU · MỐC 10 ĐIỂM' : `KẾT THÚC HIỆP ${gameState.currentRound}`}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsHistoryOpen(true)}
+            className="btn btn-ghost btn-icon"
+            aria-label={`Xem diễn biến hiệp ${gameState.currentRound}`}
+            title={`Xem diễn biến hiệp ${gameState.currentRound}`}
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
         </div>
 
         {isGameOver ? (
@@ -144,6 +191,63 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
           </button>
         )}
       </div>
+
+      {isHistoryOpen && (
+        <div className="modal-overlay">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="round-history-title"
+            className="bottom-sheet max-w-2xl max-h-[85vh] flex flex-col"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <div className="eyebrow">Nhật ký công khai</div>
+                <h2 id="round-history-title" className="phase-title flex items-center gap-2 mt-1">
+                  <ScrollText className="w-6 h-6" />
+                  Diễn biến hiệp {gameState.currentRound}
+                </h2>
+                <p className="text-xs text-secondary mt-1">
+                  Theo thứ tự từ đầu hiệp đến House Reveal. Thông tin xem bí mật không xuất hiện tại đây.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHistoryOpen(false)}
+                className="btn btn-ghost btn-icon shrink-0"
+                aria-label="Đóng lịch sử hiệp"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="game-log flex-1 overflow-y-auto mt-4 pr-1 space-y-2">
+              {currentRoundLogs.map((log, index) => (
+                <div
+                  key={log.id}
+                  className={`game-log-entry ${['KILL', 'DEFENSE', 'REVEAL', 'HONOR'].includes(log.type) ? 'is-important' : ''}`}
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted mb-1">
+                    <span className="badge min-h-0 px-2">{index + 1}</span>
+                    <span>{log.timestamp}</span>
+                    <span>•</span>
+                    <span>{phaseLabel(log.phase)}</span>
+                  </div>
+                  <div>{log.messageVi}</div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsHistoryOpen(false)}
+              className="btn btn-primary mt-4"
+            >
+              Đóng nhật ký
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
