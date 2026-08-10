@@ -50,6 +50,22 @@ function broadcastRoomUpdate(roomCode: string) {
   }
 }
 
+function broadcastRoomCancellation(roomCode: string, message: string) {
+  const clients = sseClients.get(roomCode);
+  if (!clients) return;
+
+  const data = `event: room-cancelled\ndata: ${JSON.stringify({ message })}\n\n`;
+  for (const client of clients) {
+    try {
+      client.response.write(data);
+      client.response.end();
+    } catch {
+      // A disconnected client has already left the room.
+    }
+  }
+  sseClients.delete(roomCode);
+}
+
 // --- API ENDPOINTS ---
 
 // Healthcheck
@@ -218,6 +234,24 @@ app.post('/api/rooms/remove-bot', (req, res) => {
   broadcastRoomUpdate(code);
 
   res.json({ state: getStateForPlayer(room, playerId) });
+});
+
+// Cancel Room (host only, available in every game phase)
+app.post('/api/rooms/cancel', (req, res) => {
+  const { roomCode, playerId } = req.body as { roomCode: string; playerId?: string };
+  const code = roomCode?.toUpperCase();
+  const room = rooms.get(code);
+
+  if (!room) return res.status(404).json({ error: 'Không tìm thấy phòng' });
+  const requester = room.players.find((player) => player.id === playerId);
+  if (!requester?.isHost) {
+    return res.status(403).json({ error: 'Chỉ chủ phòng mới có thể hủy phòng.' });
+  }
+
+  const message = 'Chủ phòng đã hủy phòng. Bạn đã được đưa về phòng chờ.';
+  rooms.delete(code);
+  broadcastRoomCancellation(code, message);
+  return res.json({ cancelled: true });
 });
 
 // Start Game

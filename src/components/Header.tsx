@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, HelpCircle, Users, Flame } from 'lucide-react';
+import { Volume2, VolumeX, HelpCircle, Users, Flame, XCircle } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 interface HeaderProps {
@@ -7,6 +7,9 @@ interface HeaderProps {
   currentRound?: number;
   onOpenRules: () => void;
   onReturnLobby?: () => void;
+  canCancelRoom?: boolean;
+  isCancellingRoom?: boolean;
+  onCancelRoom?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,6 +17,9 @@ export const Header: React.FC<HeaderProps> = ({
   currentRound,
   onOpenRules,
   onReturnLobby,
+  canCancelRoom = false,
+  isCancellingRoom = false,
+  onCancelRoom,
 }) => {
   const [isMuted, setIsMuted] = React.useState(sounds.getMuted());
 
@@ -62,6 +68,21 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Action Buttons */}
       <div className="game-header-actions">
+        {canCancelRoom && onCancelRoom && (
+          <button
+            type="button"
+            onClick={onCancelRoom}
+            disabled={isCancellingRoom}
+            className="btn btn-danger"
+            title="Hủy phòng"
+          >
+            <XCircle className="w-5 h-5" />
+            <span className="hidden lg:inline">
+              {isCancellingRoom ? 'Đang hủy…' : 'Hủy phòng'}
+            </span>
+          </button>
+        )}
+
         <button
           onClick={onOpenRules}
           className="btn btn-ghost"

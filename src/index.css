@@ -179,6 +179,16 @@ button { touch-action: manipulation; }
   background: var(--color-surface-hover);
   border-color: var(--color-border-strong);
 }
+.btn-danger {
+  color: #fecaca;
+  background: rgba(185, 28, 28, 0.16);
+  border-color: rgba(248, 113, 113, 0.42);
+}
+.btn-danger:hover:not(:disabled) {
+  color: var(--color-white);
+  background: rgba(185, 28, 28, 0.32);
+  border-color: rgba(248, 113, 113, 0.72);
+}
 .btn-ghost { background: transparent; color: var(--text-secondary); }
 .btn-icon { width: 44px; min-width: 44px; height: 44px; padding: 0; }
 .btn-cta { min-height: 54px; width: 100%; }

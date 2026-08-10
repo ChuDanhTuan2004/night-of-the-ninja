@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MotionConfig } from 'motion/react';
 import { Header } from './components/Header';
 import { LobbyView } from './components/LobbyView';
@@ -49,8 +49,22 @@ export default function App() {
   const [privateResult, setPrivateResult] = useState<string | null>(null);
   const lastPrivateResultKey = useRef<string | null>(null);
 
+  const clearCurrentSession = useCallback((message?: string) => {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setGameState(null);
+    setMyPlayerId(null);
+    setPendingAction(null);
+    setActionError(message ?? null);
+    setPrivateResult(null);
+    lastPrivateResultKey.current = null;
+  }, []);
+
   useEffect(() => {
     try {
+      if (!gameState && !myPlayerId) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        return;
+      }
       localStorage.setItem(
         SESSION_STORAGE_KEY,
         JSON.stringify({ gameState, myPlayerId, gameMode })
@@ -81,6 +95,7 @@ export default function App() {
     const eventSource = new EventSource(
       `/api/rooms/${gameState.roomCode}/stream?playerId=${encodeURIComponent(myPlayerId || '')}`
     );
+    let roomWasCancelled = false;
 
     eventSource.onmessage = (event) => {
       try {
@@ -92,14 +107,26 @@ export default function App() {
       }
     };
 
+    eventSource.addEventListener('room-cancelled', (event) => {
+      roomWasCancelled = true;
+      eventSource.close();
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { message?: string };
+        clearCurrentSession(payload.message || 'Chủ phòng đã hủy phòng.');
+      } catch {
+        clearCurrentSession('Chủ phòng đã hủy phòng.');
+      }
+    });
+
     eventSource.onerror = () => {
+      if (roomWasCancelled) return;
       setActionError('Mất kết nối với phòng. Trò chơi đang tự thử kết nối lại…');
     };
 
     return () => {
       eventSource.close();
     };
-  }, [gameState?.roomCode, gameState?.gameMode, myPlayerId]);
+  }, [gameState?.roomCode, gameState?.gameMode, myPlayerId, clearCurrentSession]);
 
   // Handle Room Creation
   const handleCreateRoom = async (hostName: string, mode: GameMode) => {
@@ -415,6 +442,47 @@ export default function App() {
     }
   };
 
+  const handleCancelRoom = async () => {
+    if (!gameState || !myPlayerId || pendingAction) return;
+    const currentPlayer = gameState.players.find((player) => player.id === myPlayerId);
+    if (!currentPlayer?.isHost) return;
+
+    const isOnlineRoom = gameState.gameMode === 'ONLINE_ROOM';
+    const confirmation = isOnlineRoom
+      ? 'Hủy phòng ngay bây giờ? Tất cả người chơi sẽ được đưa về phòng chờ.'
+      : 'Kết thúc ván chơi với bot và trở về màn hình chính?';
+    if (!window.confirm(confirmation)) return;
+
+    if (!isOnlineRoom) {
+      void fetch('/api/rooms/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
+        keepalive: true,
+      }).catch(() => {
+        // A local bot game also works without the room server.
+      });
+      clearCurrentSession();
+      return;
+    }
+
+    setPendingAction('CANCEL_ROOM');
+    setActionError(null);
+    try {
+      const res = await fetch('/api/rooms/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Không thể hủy phòng.');
+      clearCurrentSession();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không thể hủy phòng.');
+      setPendingAction(null);
+    }
+  };
+
   const handleReturnLobby = () => {
     const isActiveMatch =
       gameState &&
@@ -428,16 +496,14 @@ export default function App() {
       return;
     }
 
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    setGameState(null);
-    setMyPlayerId(null);
-    setActionError(null);
-    setPrivateResult(null);
-    lastPrivateResultKey.current = null;
+    clearCurrentSession();
   };
 
   const currentHumanPlayer =
     gameState?.players.find((p) => p.id === myPlayerId) || gameState?.players[0];
+  const isCurrentUserHost = Boolean(
+    gameState && myPlayerId && gameState.players.some((player) => player.id === myPlayerId && player.isHost)
+  );
 
   return (
     <MotionConfig reducedMotion="user">
@@ -448,6 +514,9 @@ export default function App() {
         currentRound={gameState?.currentRound}
         onOpenRules={() => setIsRulesOpen(true)}
         onReturnLobby={handleReturnLobby}
+        canCancelRoom={isCurrentUserHost}
+        isCancellingRoom={pendingAction === 'CANCEL_ROOM'}
+        onCancelRoom={handleCancelRoom}
       />
 
       {/* Main Game Screen View Routing */}
