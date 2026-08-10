@@ -144,25 +144,48 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
           <div className="game-card game-card-section">
             <h3 className="section-title mb-4"><Crosshair className="w-5 h-5" /> Toàn bàn</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {gameState.players.map((player) => (
-                <div
-                  key={player.id}
-                  className={`player-card flex-col items-stretch ${!player.isAlive ? 'is-eliminated' : ''} ${player.id === currentPlayer.id ? 'is-current' : ''}`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="avatar relative">{player.avatar}{!player.isAlive && <span className="absolute -top-1 -right-1 text-xs">💀</span>}</div>
-                    <div className="truncate">
-                      <div className="player-card-name">{player.name}{player.id === currentPlayer.id ? ' (Bạn)' : ''}</div>
-                      <div className="player-card-status">{player.isAlive ? '● Còn sống' : '✖ Đã gục ngã'}</div>
+              {gameState.players.map((player) => {
+                const isCurrentHuman = player.id === currentPlayer.id;
+                const canSeeHouse = Boolean(
+                  player.house &&
+                  (player.revealedHouse || (isCurrentHuman && !player.unknownCurrentHouse)),
+                );
+
+                return (
+                  <div
+                    key={player.id}
+                    className={`player-card flex-col items-stretch ${!player.isAlive ? 'is-eliminated' : ''} ${isCurrentHuman ? 'is-current' : ''}`}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="avatar relative">{player.avatar}{!player.isAlive && <span className="absolute -top-1 -right-1 text-xs">💀</span>}</div>
+                      <div className="truncate">
+                        <div className="player-card-name">{player.name}{isCurrentHuman ? ' (Bạn)' : ''}</div>
+                        <div className="player-card-status">{player.isAlive ? '● Còn sống' : '✖ Đã gục ngã'}</div>
+                      </div>
                     </div>
+
+                    {canSeeHouse && player.house ? (
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <div className="badge rounded-lg justify-center">
+                          {player.house.icon} {player.house.nameVi}
+                        </div>
+                        {isCurrentHuman && (
+                          <div className={`badge rounded-lg justify-center ${player.revealedHouse ? 'badge-primary' : ''}`}>
+                            {player.revealedHouse ? '👁 Đã bị lộ' : '🔒 Chưa bị lộ'}
+                          </div>
+                        )}
+                      </div>
+                    ) : isCurrentHuman && player.unknownCurrentHouse ? (
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <div className="player-card-status text-center">🔀 House đã bị tráo</div>
+                        <div className="badge rounded-lg justify-center">🔒 Chưa bị lộ</div>
+                      </div>
+                    ) : (
+                      <div className="player-card-status text-center">🔒 House bí mật</div>
+                    )}
                   </div>
-                  {player.revealedHouse && player.house ? (
-                    <div className="badge rounded-lg justify-center">{player.house.icon} {player.house.nameVi}</div>
-                  ) : (
-                    <div className="player-card-status text-center">🔒 House bí mật</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
