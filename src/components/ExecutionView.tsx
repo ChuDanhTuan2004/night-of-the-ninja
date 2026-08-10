@@ -264,7 +264,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
           ) : null}
         </div>
 
-        <div className="game-card game-card-section flex flex-col h-[520px]">
+        <div className="game-card game-card-section game-log-card">
           <h3 className="section-title mb-3 border-b border-white/10 pb-2"><Scroll className="w-5 h-5" /> Nhật ký đêm</h3>
           <div className="game-log flex-1 overflow-y-auto pr-1">
             {gameState.actionLogs.map((log) => (

@@ -409,20 +409,35 @@ button { touch-action: manipulation; }
   border: 1px solid var(--color-primary-medium);
   border-radius: var(--radius-md);
 }
-.phase-track { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.phase-step {
+.game-log-card {
   display: flex;
+  flex-direction: column;
+  height: 300px;
+}
+.phase-track {
+  display: flex;
+  overflow-x: auto;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  scrollbar-width: none;
+}
+.phase-track::-webkit-scrollbar {
+  display: none;
+}
+.phase-step {
+  display: inline-flex;
   min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   color: var(--text-muted);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: var(--font-xs);
   font-weight: 600;
+  flex: 0 0 110px;
 }
 .phase-step.is-active {
   color: var(--text-primary);
@@ -553,7 +568,17 @@ button { touch-action: manipulation; }
     border-bottom: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
   }
-  .phase-track { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .phase-track {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+  .phase-step {
+    flex: initial;
+  }
+  .game-log-card {
+    height: 520px;
+  }
   .turn-action-panel {
     flex-direction: row;
     align-items: center;
@@ -573,6 +598,49 @@ button { touch-action: manipulation; }
 @media (min-width: 1024px) {
   .game-main { padding: var(--space-8); }
   .game-container { max-width: 960px; }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.modal-overlay {
+  animation: fade-in 0.2s ease-out;
+}
+.bottom-sheet {
+  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 375px) {
+  .ninja-card {
+    height: 190px;
+    padding: var(--space-2);
+  }
+  .ninja-card-title {
+    font-size: 13px;
+  }
+  .ninja-card-copy {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .ninja-card-rank {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+  .player-card {
+    padding: var(--space-2);
+    gap: var(--space-2);
+  }
+  .avatar {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    font-size: var(--font-lg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

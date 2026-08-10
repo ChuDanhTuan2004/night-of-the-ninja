@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
         {roomCode && (
           <div className="badge">
             <Users className="w-4 h-4" />
-            <span>MÃ PHÒNG:</span>
+            <span className="hidden sm:inline">MÃ PHÒNG:</span>
             <span className="font-bold tracking-wider">{roomCode}</span>
           </div>
         )}
@@ -58,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
         {currentRound !== undefined && (
           <div className="badge badge-primary">
             <Flame className="w-4 h-4" />
-            <span>HIỆP:</span>
+            <span className="hidden sm:inline">HIỆP:</span>
             <span className="font-bold">
               {currentRound}
             </span>
