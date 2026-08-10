@@ -218,7 +218,7 @@ button { touch-action: manipulation; }
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: 0;
+  margin-bottom: 10px;
   color: var(--text-primary);
   font-size: var(--font-md);
   font-weight: 700;

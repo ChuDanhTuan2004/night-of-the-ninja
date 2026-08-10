@@ -141,13 +141,10 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
                   <div className="truncate">
                     <div className="player-card-name flex items-center gap-2">
                       <span>{player.name}</span>
-                      {player.house && player.revealedHouse && (
+                      {player.house && (
                         <span className="badge px-2 min-h-0">
                           {player.house.icon} {player.house.nameVi}
                         </span>
-                      )}
-                      {player.house && !player.revealedHouse && (
-                        <span className="badge px-2 min-h-0">🔒 House không lộ</span>
                       )}
                     </div>
                     <div className="player-card-status">
