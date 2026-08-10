@@ -32,9 +32,21 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onKickPlayer,
   onStartGame,
 }) => {
-  const [hostName, setHostName] = useState('Ninja Master');
+  const [hostName, setHostName] = useState(() => {
+    try {
+      return localStorage.getItem('night-of-the-ninja-nickname') || 'Ninja Master';
+    } catch {
+      return 'Ninja Master';
+    }
+  });
   const [joinCodeInput, setJoinCodeInput] = useState('');
-  const [joinNameInput, setJoinNameInput] = useState('Shinobi');
+  const [joinNameInput, setJoinNameInput] = useState(() => {
+    try {
+      return localStorage.getItem('night-of-the-ninja-nickname') || 'Shinobi';
+    } catch {
+      return 'Shinobi';
+    }
+  });
   const [copiedCode, setCopiedCode] = useState(false);
   const [tab, setTab] = useState<'CREATE' | 'JOIN'>('JOIN');
 
@@ -129,7 +141,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
 
               <button
-                onClick={() => onCreateRoom(hostName, gameMode)}
+                onClick={() => {
+                  try {
+                    localStorage.setItem('night-of-the-ninja-nickname', hostName);
+                  } catch {
+                    // Ignore localStorage errors in private browsing
+                  }
+                  onCreateRoom(hostName, gameMode);
+                }}
                 disabled={isBusy || !hostName.trim()}
                 className="btn btn-primary btn-cta"
               >
@@ -167,7 +186,14 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               </div>
 
               <button
-                onClick={() => onJoinRoom(joinCodeInput, joinNameInput)}
+                onClick={() => {
+                  try {
+                    localStorage.setItem('night-of-the-ninja-nickname', joinNameInput);
+                  } catch {
+                    // Ignore localStorage errors in private browsing
+                  }
+                  onJoinRoom(joinCodeInput, joinNameInput);
+                }}
                 disabled={isBusy || !joinCodeInput.trim() || !joinNameInput.trim()}
                 className="btn btn-primary btn-cta"
               >
