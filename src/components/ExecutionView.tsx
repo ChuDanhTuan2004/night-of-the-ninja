@@ -221,7 +221,16 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                       <div className="avatar relative">{player.avatar}{!player.isAlive && <span className="absolute -top-1 -right-1 text-xs">💀</span>}</div>
                       <div className="truncate">
                         <div className="player-card-name">{player.name}{isCurrentHuman ? ' (Bạn)' : ''}</div>
-                        <div className="player-card-status">{player.isAlive ? '● Còn sống' : '✖ Đã gục ngã'}</div>
+                        <div className="player-card-status flex items-center gap-1.5 flex-wrap">
+                          <span>{player.isAlive ? '● Còn sống' : '✖ Đã gục ngã'}</span>
+                          <span>•</span>
+                          <span className="text-amber-400 font-medium flex items-center gap-1">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" className="w-3.5 h-3.5 inline-block text-amber-400">
+                              <path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5L12 2z M12 10a2 2 0 100 4 2 2 0 000-4z" />
+                            </svg>
+                            {player.honorTokens?.length || 0} phi tiêu
+                          </span>
+                        </div>
                       </div>
                     </div>
 
