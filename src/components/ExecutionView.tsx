@@ -167,13 +167,13 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
           </div>
 
           {currentPlayer.isAlive && humanCardToPlay ? (
-            <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card is-active game-card-section flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
+            <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card is-active game-card-section turn-action-panel">
+              <div className="turn-action-copy">
                 <div className="eyebrow">Đến lượt bạn · Priority {humanCardToPlay.priority}</div>
                 <h3 className="section-title text-xl mt-1">{humanCardToPlay.icon} {humanCardToPlay.nameVi}</h3>
                 <p className="text-xs text-secondary mt-1 max-w-md">{humanCardToPlay.descriptionVi}</p>
               </div>
-              <button onClick={() => startTargeting(humanCardToPlay)} className="btn btn-primary btn-cta md:w-auto shrink-0">Kích hoạt kỹ năng</button>
+              <button onClick={() => startTargeting(humanCardToPlay)} className="btn btn-primary btn-cta turn-action-button">Kích hoạt kỹ năng</button>
             </motion.div>
           ) : queuedAction ? (
             <div className="status-panel text-sm text-secondary">Đang chờ {queuedAction.player.name} xử lý lá priority {queuedAction.card.priority}…</div>

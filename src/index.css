@@ -183,6 +183,18 @@ button { touch-action: manipulation; }
 .btn-icon { width: 44px; min-width: 44px; height: 44px; padding: 0; }
 .btn-cta { min-height: 54px; width: 100%; }
 
+.turn-action-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.turn-action-copy {
+  min-width: 0;
+}
+.turn-action-button {
+  flex: 0 0 auto;
+}
+
 .badge {
   display: inline-flex;
   min-height: 28px;
@@ -531,7 +543,20 @@ button { touch-action: manipulation; }
     border-bottom: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
   }
-  .phase-track { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .phase-track { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .turn-action-panel {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .turn-action-copy {
+    flex: 1 1 auto;
+  }
+  .turn-action-button {
+    width: auto;
+    min-width: 200px;
+    max-width: 260px;
+  }
   .ninja-card { height: 240px; }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MotionConfig } from 'motion/react';
 import { Header } from './components/Header';
 import { LobbyView } from './components/LobbyView';
@@ -46,6 +46,8 @@ export default function App() {
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [privateResult, setPrivateResult] = useState<string | null>(null);
+  const lastPrivateResultKey = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -57,6 +59,20 @@ export default function App() {
       // The game remains usable when storage is unavailable.
     }
   }, [gameState, myPlayerId, gameMode]);
+
+  // Secret card effects must be hard to miss, even if the engine advances phase
+  // or opens the round summary immediately after resolving the action.
+  useEffect(() => {
+    if (!gameState || !myPlayerId) return;
+    const notices = gameState.privateNotices?.[myPlayerId] ?? [];
+    if (notices.length === 0) return;
+
+    const noticeKey = `${gameState.currentRound}:${notices.join('\u241f')}`;
+    if (lastPrivateResultKey.current === noticeKey) return;
+
+    lastPrivateResultKey.current = noticeKey;
+    setPrivateResult(notices[0]);
+  }, [gameState?.currentRound, gameState?.privateNotices, myPlayerId]);
 
   // SSE Real-time sync for ONLINE_ROOM
   useEffect(() => {
@@ -416,6 +432,8 @@ export default function App() {
     setGameState(null);
     setMyPlayerId(null);
     setActionError(null);
+    setPrivateResult(null);
+    lastPrivateResultKey.current = null;
   };
 
   const currentHumanPlayer =
@@ -476,6 +494,38 @@ export default function App() {
 
       {/* Game Rules Modal */}
       <GameRulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
+
+      {privateResult && (
+        <div className="modal-overlay">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="private-result-title"
+            className="bottom-sheet max-w-md text-center space-y-5"
+          >
+            <div className="space-y-2">
+              <div className="text-4xl" aria-hidden="true">👁️</div>
+              <div className="eyebrow">Chỉ mình bạn thấy thông tin này</div>
+              <h2 id="private-result-title" className="phase-title">
+                Kết quả bí mật
+              </h2>
+            </div>
+
+            <div className="status-panel text-base text-white">
+              {privateResult}
+            </div>
+
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setPrivateResult(null)}
+              className="btn btn-primary btn-cta w-full"
+            >
+              Đã ghi nhớ
+            </button>
+          </div>
+        </div>
+      )}
     </div>
     </MotionConfig>
   );
