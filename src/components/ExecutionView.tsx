@@ -18,6 +18,7 @@ interface ExecutionViewProps {
     targetId: string,
     secondTargetId: string,
   ) => Promise<ShapeshifterInspection>;
+  onShowConfirmDialog?: (message: string, onConfirm: () => void) => void;
 }
 
 const PHASE_STEPS: { phase: NinjaPhase; labelVi: string; icon: string }[] = [
@@ -54,6 +55,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
   currentPlayer,
   onExecuteCardAction,
   onInspectShapeshifterTargets,
+  onShowConfirmDialog,
 }) => {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [secondTargetId, setSecondTargetId] = useState<string | null>(null);
@@ -283,8 +285,16 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    if (window.confirm(`Bạn có chắc chắn không muốn sử dụng lá [${humanCardToPlay.nameVi}]?`)) {
+                    const message = `Bạn có chắc chắn không muốn sử dụng lá [${humanCardToPlay.nameVi}]?`;
+                    const onConfirm = () => {
                       onExecuteCardAction(humanCardToPlay.id, undefined, undefined, 'SKIP');
+                    };
+                    if (onShowConfirmDialog) {
+                      onShowConfirmDialog(message, onConfirm);
+                    } else {
+                      if (window.confirm(message)) {
+                        onConfirm();
+                      }
                     }
                   }}
                   className="btn btn-secondary btn-cta flex-1"

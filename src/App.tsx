@@ -646,6 +646,13 @@ export default function App() {
             currentPlayer={currentHumanPlayer!}
             onExecuteCardAction={handleExecuteCardAction}
             onInspectShapeshifterTargets={handleInspectShapeshifterTargets}
+            onShowConfirmDialog={(message, onConfirm) => setConfirmDialog({
+              message,
+              onConfirm: () => {
+                setConfirmDialog(null);
+                onConfirm();
+              }
+            })}
           />
         ) : (
           <RoundSummaryView
