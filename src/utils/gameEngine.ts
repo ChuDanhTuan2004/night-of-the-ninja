@@ -304,6 +304,22 @@ export function executeCardAction(
 
   const actor = queuedAction.player;
   const card = queuedAction.card;
+
+  if (decision === 'SKIP') {
+    let nextState: GameState = {
+      ...state,
+      executionStep: state.executionStep + 1,
+      players: state.players.map((player) => player.id === actorId
+        ? { ...player, playedCardsThisPhase: [...player.playedCardsThisPhase, card] }
+        : player),
+      pendingCard: state.pendingCard && state.pendingCard.card.id === cardId ? null : state.pendingCard,
+    };
+    const logs = [...nextState.actionLogs];
+    logs.unshift(logEntry(`${actor.name} quyết định không sử dụng [${card.nameVi}].`, 'ACTION', { phase: card.phase ?? undefined, actorId }));
+    nextState.actionLogs = logs;
+    return processNextExecutionStep(nextState);
+  }
+
   if (card.effectType === 'SHAPESHIFTER') {
     const validDecision = decision === 'KEEP' || decision === 'SWAP';
     if (

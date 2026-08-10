@@ -274,7 +274,24 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 <h3 className="section-title text-xl mt-1">{humanCardToPlay.icon} {humanCardToPlay.nameVi}</h3>
                 <p className="text-xs text-secondary mt-1 max-w-md">{humanCardToPlay.descriptionVi}</p>
               </div>
-              <button onClick={() => startTargeting(humanCardToPlay)} className="btn btn-primary btn-cta turn-action-button">Kích hoạt kỹ năng</button>
+              <div className="flex flex-col sm:flex-row gap-3 w-full mt-2">
+                <button
+                  onClick={() => startTargeting(humanCardToPlay)}
+                  className="btn btn-primary btn-cta flex-1"
+                >
+                  Kích hoạt kỹ năng
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Bạn có chắc chắn không muốn sử dụng lá [${humanCardToPlay.nameVi}]?`)) {
+                      onExecuteCardAction(humanCardToPlay.id, undefined, undefined, 'SKIP');
+                    }
+                  }}
+                  className="btn btn-secondary btn-cta flex-1"
+                >
+                  Không sử dụng
+                </button>
+              </div>
             </motion.div>
           ) : queuedAction ? (
             <div className="status-panel text-sm text-secondary">Đang chờ {queuedAction.player.name} xử lý lá priority {queuedAction.card.priority}…</div>
