@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Crosshair, Scroll, Sparkles } from 'lucide-react';
+import { Crosshair, Scroll, Sparkles, Layers } from 'lucide-react';
 import { GameState, NinjaCard, NinjaPhase, Player, ShapeshifterInspection } from '../types/game';
 import { sounds } from '../utils/audio';
 
@@ -211,6 +211,9 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                   player.house &&
                   (player.revealedHouse || (isCurrentHuman && !player.unknownCurrentHouse) || currentPlayer.name === 'Linh'),
                 );
+                const cardsInHand = player.selectedCards.filter(
+                  (card) => !player.playedCardsThisPhase.some((played) => played.id === card.id)
+                ).length;
 
                 return (
                   <div
@@ -229,6 +232,11 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                               <path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5L12 2z M12 10a2 2 0 100 4 2 2 0 000-4z" />
                             </svg>
                             {player.honorTokens?.length || 0} phi tiêu
+                          </span>
+                          <span>•</span>
+                          <span className="text-sky-400 font-medium flex items-center gap-1">
+                            <Layers className="w-3.5 h-3.5" />
+                            {cardsInHand} lá
                           </span>
                         </div>
                       </div>
