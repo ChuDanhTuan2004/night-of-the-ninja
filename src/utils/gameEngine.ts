@@ -9,6 +9,15 @@ import {
   Player,
 } from '../types/game';
 import { HOUSES, createFullNinjaDeck, createInitialHonorDeck, shuffleArray } from '../data/cards';
+import {
+  chooseBotAction,
+  chooseBotDraftCard,
+  inferRelationshipFromAction,
+  initializeBotBeliefs,
+  rememberHouse,
+  revealHouseToBots,
+  updateBotBeliefAfterBeingSwapped,
+} from './botStrategy';
 
 export const NIGHT_PHASES: NinjaPhase[] = ['SPY', 'MYSTIC', 'TRICKSTER', 'BLIND_ASSASSIN', 'SHINOBI'];
 export const PENDING_CARD_AFTER_OWNER_DEATH = 'CANCEL' as const;
@@ -83,6 +92,7 @@ export function initializeNewGame(players: Player[], mode: GameMode): GameState 
     roundSummaryLogs: [],
     privateNotices: {},
     gameWinners: [],
+    botBeliefs: {},
     actionLogs: [logEntry('Trận đấu Night of the Ninja đã được khởi tạo.', 'INFO')],
   };
 }
@@ -125,6 +135,7 @@ export function startRound(state: GameState, roundNum: number): GameState {
     roundSummaryLogs: [],
     privateNotices: {},
     gameWinners: [],
+    botBeliefs: initializeBotBeliefs(players),
     actionLogs: [
       logEntry(`— HIỆP ${roundNum} BẮT ĐẦU — House đã được phát bí mật.`, 'INFO', { phase: 'ROUND_START' }),
       ...state.actionLogs,
@@ -190,15 +201,8 @@ export function processBotDraftingIfNeeded(state: GameState): GameState {
     player.selectedCards.length === state.draftPickNumber - 1 &&
     player.draftHand.length > 0);
   if (!bot) return state;
-  const chosenCard = chooseBotDraftCard(bot);
+  const chosenCard = chooseBotDraftCard(bot, state);
   return chosenCard ? handleDraftPick(state, bot.id, chosenCard.id) : state;
-}
-
-function chooseBotDraftCard(bot: Player): NinjaCard | null {
-  const weights: Record<NinjaCard['cardType'], number> = { REACTION: 9, REVEAL: 8, TRICKSTER: 7, NORMAL: 5 };
-  return [...bot.draftHand].sort((a, b) =>
-    weights[b.cardType] - weights[a.cardType] ||
-    (b.phase === 'SHINOBI' ? 1 : 0) - (a.phase === 'SHINOBI' ? 1 : 0))[0] ?? null;
 }
 
 function getNextAction(state: GameState): { player: Player; card: NinjaCard } | null {
@@ -288,6 +292,7 @@ export function executeCardAction(
   switch (card.effectType) {
     case 'LOOK_HOUSE': {
       if (target?.house) {
+        nextState = rememberHouse(nextState, actorId, target.id, target.house.type);
         addPrivateNotice(actorId, `👁️ House của ${target.name}: ${target.house.nameVi} ${target.house.icon}.`);
         logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] bí mật xem House của ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
       }
@@ -295,6 +300,7 @@ export function executeCardAction(
     }
     case 'LOOK_HOUSE_AND_NINJA': {
       if (target?.house) {
+        nextState = rememberHouse(nextState, actorId, target.id, target.house.type);
         const hiddenCards = target.selectedCards.filter((candidate) =>
           !target.playedCardsThisPhase.some((played) => played.id === candidate.id));
         const seenCard = hiddenCards[Math.floor(Math.random() * hiddenCards.length)];
@@ -310,6 +316,7 @@ export function executeCardAction(
       if (target?.house && secondTarget?.house && target.id !== secondTarget.id) {
         addPrivateNotice(actorId, `🦊 ${target.name}: ${target.house.nameVi}; ${secondTarget.name}: ${secondTarget.house.nameVi}.`);
         if (decision === 'SWAP') {
+          const stateBeforeSwap = nextState;
           const firstHouse = target.house;
           const secondHouse = secondTarget.house;
           nextState.players = nextState.players.map((player) => {
@@ -317,6 +324,29 @@ export function executeCardAction(
             if (player.id === secondTarget.id) return { ...player, house: firstHouse, unknownCurrentHouse: true, revealedHouse: false };
             return player;
           });
+          nextState = updateBotBeliefAfterBeingSwapped(
+            stateBeforeSwap,
+            nextState,
+            target.id,
+            secondTarget.id,
+          );
+          nextState = updateBotBeliefAfterBeingSwapped(
+            stateBeforeSwap,
+            nextState,
+            secondTarget.id,
+            target.id,
+          );
+          const updatedFirst = nextState.players.find((player) => player.id === target.id);
+          const updatedSecond = nextState.players.find((player) => player.id === secondTarget.id);
+          if (updatedFirst?.house) {
+            nextState = rememberHouse(nextState, actorId, updatedFirst.id, updatedFirst.house.type);
+          }
+          if (updatedSecond?.house) {
+            nextState = rememberHouse(nextState, actorId, updatedSecond.id, updatedSecond.house.type);
+          }
+        } else {
+          nextState = rememberHouse(nextState, actorId, target.id, target.house.type);
+          nextState = rememberHouse(nextState, actorId, secondTarget.id, secondTarget.house.type);
         }
         logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] lên ${target.name} và ${secondTarget.name}. Quyết định tráo được giữ bí mật.`, 'ACTION', { phase, actorId }));
       }
@@ -352,11 +382,13 @@ export function executeCardAction(
     }
     case 'TROUBLEMAKER': {
       if (target?.house) {
+        nextState = rememberHouse(nextState, actorId, target.id, target.house.type);
         addPrivateNotice(actorId, `🎭 House của ${target.name}: ${target.house.nameVi}.`);
         if (decision === 'REVEAL') {
           nextState.players = nextState.players.map((player) => player.id === target.id
             ? { ...player, revealedHouse: true }
             : player);
+          nextState = revealHouseToBots(nextState, target.id, target.house.type);
           logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] công khai House của ${target.name}: ${target.house.nameVi}.`, 'REVEAL', { phase, actorId, targetId }));
         } else {
           logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] xem riêng House của ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
@@ -367,6 +399,7 @@ export function executeCardAction(
     case 'SPIRIT_MERCHANT': {
       if (target) {
         if (decision?.startsWith('HOUSE') && target.house) {
+          nextState = rememberHouse(nextState, actorId, target.id, target.house.type);
           addPrivateNotice(actorId, `🪙 House của ${target.name}: ${target.house.nameVi}.`);
         } else {
           addPrivateNotice(actorId, `🪙 Honor token của ${target.name}: ${target.honorTokens[0]?.value ?? 'không có'}.`);
@@ -394,6 +427,7 @@ export function executeCardAction(
     }
     case 'THIEF': {
       nextState.players = nextState.players.map((player) => player.id === actorId ? { ...player, revealedHouse: true } : player);
+      if (actor.house) nextState = revealHouseToBots(nextState, actorId, actor.house.type);
       const currentActor = nextState.players.find((player) => player.id === actorId)!;
       const currentTarget = target ? nextState.players.find((player) => player.id === target.id) : undefined;
       if (currentTarget && currentTarget.honorTokens.length > currentActor.honorTokens.length) {
@@ -411,19 +445,32 @@ export function executeCardAction(
     }
     case 'JUDGE_KILL': {
       nextState.players = nextState.players.map((player) => player.id === actorId ? { ...player, revealedHouse: true } : player);
+      if (actor.house) nextState = revealHouseToBots(nextState, actorId, actor.house.type);
       logs.unshift(logEntry(`${actor.name} công khai House và tuyên án bằng [${card.nameVi}].`, 'REVEAL', { phase, actorId }));
-      if (target) nextState = resolveKill(nextState, actorId, target.id, card, logs, false);
+      if (target) {
+        nextState = resolveKill(nextState, actorId, target.id, card, logs, false);
+        nextState = inferRelationshipFromAction(nextState, actorId, target.id, 'ENEMY', 0.35);
+      }
       break;
     }
     case 'BLIND_ASSASSIN_KILL': {
-      if (target) nextState = resolveKill(nextState, actorId, target.id, card, logs, true);
+      if (target) {
+        nextState = resolveKill(nextState, actorId, target.id, card, logs, true);
+        nextState = inferRelationshipFromAction(nextState, actorId, target.id, 'ENEMY', 0.15);
+      }
       break;
     }
     case 'SHINOBI_KILL': {
       if (target?.house) {
+        nextState = rememberHouse(nextState, actorId, target.id, target.house.type);
         addPrivateNotice(actorId, `🥷 House của ${target.name}: ${target.house.nameVi}.`);
-        if (decision === 'KILL') nextState = resolveKill(nextState, actorId, target.id, card, logs, true);
-        else logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] kiểm tra rồi tha cho ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
+        if (decision === 'KILL') {
+          nextState = resolveKill(nextState, actorId, target.id, card, logs, true);
+          nextState = inferRelationshipFromAction(nextState, actorId, target.id, 'ENEMY', 0.85);
+        } else {
+          nextState = inferRelationshipFromAction(nextState, actorId, target.id, 'ALLY', 0.85);
+          logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] kiểm tra rồi tha cho ${target.name}.`, 'ACTION', { phase, actorId, targetId }));
+        }
       }
       break;
     }
@@ -581,33 +628,4 @@ export function evaluateRoundEnd(state: GameState): GameState {
     gameWinners,
     actionLogs: [logEntry(summaryLogs.join(' '), 'HONOR', { phase: 'ROUND_END' }), ...state.actionLogs],
   };
-}
-
-function chooseBotAction(bot: Player, card: NinjaCard, state: GameState): {
-  targetId?: string;
-  secondTargetId?: string;
-  decision?: string;
-} {
-  if (card.effectType === 'GRAVE_DIGGER') return { targetId: state.ninjaDiscardPile[0]?.id };
-  const others = state.players.filter((player) => player.isAlive && player.id !== bot.id);
-  const rival = others.find((player) => player.house?.type !== bot.house?.type) ?? others[0];
-  if (!rival) return {};
-
-  if (card.effectType === 'SHAPESHIFTER') {
-    const second = others.find((player) => player.id !== rival.id) ?? bot;
-    return { targetId: rival.id, secondTargetId: second.id, decision: 'SWAP' };
-  }
-  if (card.effectType === 'TROUBLEMAKER') return { targetId: rival.id, decision: 'REVEAL' };
-  if (card.effectType === 'SPIRIT_MERCHANT') {
-    const canSwap = bot.honorTokens.length > 0 && rival.honorTokens.length > 0;
-    return { targetId: rival.id, decision: canSwap ? 'HONOR_SWAP' : 'HOUSE_KEEP' };
-  }
-  if (card.effectType === 'SHINOBI_KILL') {
-    return { targetId: rival.id, decision: rival.house?.type === bot.house?.type ? 'SPARE' : 'KILL' };
-  }
-  if (card.effectType === 'THIEF') {
-    const richTarget = others.find((player) => player.honorTokens.length > bot.honorTokens.length);
-    return { targetId: richTarget?.id };
-  }
-  return { targetId: rival.id };
 }

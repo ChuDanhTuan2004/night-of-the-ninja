@@ -51,6 +51,8 @@ export interface HonorToken {
   value: number;
 }
 
+export type HouseBelief = Record<HouseType, number>;
+
 export interface Player {
   id: string;
   name: string;
@@ -109,5 +111,5 @@ export interface GameState {
   actionLogs: ActionLogEntry[];
   privateNotices?: Record<string, string[]>;
   gameWinners?: string[];
-  botBeliefs?: Record<string, Record<string, { LOTUS: number; CRANE: number; RONIN: number }>>;
+  botBeliefs?: Record<string, Record<string, HouseBelief>>;
 }
