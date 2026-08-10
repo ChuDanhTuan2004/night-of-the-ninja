@@ -101,6 +101,7 @@ export default function App() {
       `/api/rooms/${gameState.roomCode}/stream?playerId=${encodeURIComponent(myPlayerId || '')}`
     );
     let roomWasCancelled = false;
+    let userWasKicked = false;
 
     eventSource.onmessage = (event) => {
       try {
@@ -123,8 +124,19 @@ export default function App() {
       }
     });
 
+    eventSource.addEventListener('kicked', (event) => {
+      userWasKicked = true;
+      eventSource.close();
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { message?: string };
+        clearCurrentSession(payload.message || 'Bạn đã bị chủ phòng mời ra khỏi phòng.');
+      } catch {
+        clearCurrentSession('Bạn đã bị chủ phòng mời ra khỏi phòng.');
+      }
+    });
+
     eventSource.onerror = () => {
-      if (roomWasCancelled) return;
+      if (roomWasCancelled || userWasKicked) return;
       setActionError('Mất kết nối với phòng. Trò chơi đang tự thử kết nối lại…');
     };
 
@@ -300,6 +312,32 @@ export default function App() {
       setGameState({
         ...gameState,
         players: gameState.players.filter((p) => p.id !== botId),
+      });
+    }
+  };
+
+  // Handle Kick Player
+  const handleKickPlayer = async (targetPlayerId: string) => {
+    if (!gameState || !myPlayerId) return;
+    if (gameState.gameMode === 'ONLINE_ROOM') {
+      try {
+        const res = await fetch('/api/rooms/kick', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId, targetPlayerId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Không thể kick người chơi.');
+        if (data.state) setGameState(data.state);
+      } catch (err) {
+        setActionError(
+          err instanceof Error ? err.message : 'Không thể kick người chơi.'
+        );
+      }
+    } else {
+      setGameState({
+        ...gameState,
+        players: gameState.players.filter((p) => p.id !== targetPlayerId),
       });
     }
   };
@@ -593,6 +631,7 @@ export default function App() {
             onJoinRoom={handleJoinRoom}
             onAddBot={handleAddBot}
             onRemoveBot={handleRemoveBot}
+            onKickPlayer={handleKickPlayer}
             onStartGame={handleStartGame}
           />
         ) : gameState.status === 'DRAFTING' ? (

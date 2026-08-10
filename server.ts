@@ -255,6 +255,64 @@ app.post('/api/rooms/cancel', (req, res) => {
   return res.json({ cancelled: true });
 });
 
+// Kick Player (host only, available only in LOBBY phase)
+app.post('/api/rooms/kick', (req, res) => {
+  const { roomCode, playerId, targetPlayerId } = req.body as {
+    roomCode: string;
+    playerId?: string;
+    targetPlayerId?: string;
+  };
+  const code = roomCode?.toUpperCase();
+  const room = rooms.get(code);
+
+  if (!room) return res.status(404).json({ error: 'Không tìm thấy phòng' });
+  
+  const requester = room.players.find((player) => player.id === playerId);
+  if (!requester?.isHost) {
+    return res.status(403).json({ error: 'Chỉ chủ phòng mới có quyền kick người chơi.' });
+  }
+
+  if (room.status !== 'LOBBY') {
+    return res.status(400).json({ error: 'Chỉ có thể kick người chơi khi ở phòng chờ.' });
+  }
+
+  const targetPlayer = room.players.find((player) => player.id === targetPlayerId);
+  if (!targetPlayer) {
+    return res.status(404).json({ error: 'Không tìm thấy người chơi cần kick.' });
+  }
+
+  if (targetPlayer.isHost) {
+    return res.status(400).json({ error: 'Không thể kick chủ phòng.' });
+  }
+
+  // Remove player from the list
+  room.players = room.players.filter((player) => player.id !== targetPlayerId);
+  rooms.set(code, room);
+
+  // Send SSE kicked event to the target client before disconnecting them
+  const clients = sseClients.get(code);
+  if (clients) {
+    for (const client of clients) {
+      if (client.playerId === targetPlayerId) {
+        try {
+          const data = `event: kicked\ndata: ${JSON.stringify({ message: 'Bạn đã bị chủ phòng mời ra khỏi phòng.' })}\n\n`;
+          client.response.write(data);
+          client.response.end();
+        } catch {
+          // Client might be already gone
+        }
+        clients.delete(client);
+        break;
+      }
+    }
+  }
+
+  // Update room status for remaining players
+  broadcastRoomUpdate(code);
+
+  return res.json({ state: getStateForPlayer(room, playerId) });
+});
+
 // Start Game
 app.post('/api/rooms/start', (req, res) => {
   const { roomCode, playerId } = req.body as { roomCode: string; playerId?: string };

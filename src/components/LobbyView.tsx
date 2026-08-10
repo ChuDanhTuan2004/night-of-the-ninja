@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Bot, Play, Plus, Trash2, Copy, Check, Sparkles } from 'lucide-react';
+import { Users, Bot, Play, Plus, Trash2, Copy, Check, Sparkles, UserMinus } from 'lucide-react';
 import { GameMode, Player } from '../types/game';
 import { AVATARS } from '../data/cards';
 
@@ -14,6 +14,7 @@ interface LobbyViewProps {
   onJoinRoom: (roomCode: string, name: string) => void;
   onAddBot: () => void;
   onRemoveBot: (botId: string) => void;
+  onKickPlayer?: (playerId: string) => void;
   onStartGame: () => void;
 }
 
@@ -28,6 +29,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onJoinRoom,
   onAddBot,
   onRemoveBot,
+  onKickPlayer,
   onStartGame,
 }) => {
   const [hostName, setHostName] = useState('Ninja Master');
@@ -254,6 +256,17 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   aria-label={`Xóa ${p.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+
+              {isHost && !p.isHost && !p.isBot && (
+                <button
+                  onClick={() => onKickPlayer && onKickPlayer(p.id)}
+                  className="btn btn-ghost btn-icon text-red-400 hover:text-red-300"
+                  title="Mời ra khỏi phòng"
+                  aria-label={`Kick ${p.name}`}
+                >
+                  <UserMinus className="w-4 h-4" />
                 </button>
               )}
             </div>
