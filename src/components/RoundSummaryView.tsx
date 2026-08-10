@@ -44,7 +44,19 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [isHistoryOpen]);
 
-  const sortedPlayers = [...gameState.players].sort((a, b) => b.totalScore - a.totalScore);
+  const sortedPlayers = [...gameState.players].sort(
+    (a, b) => b.honorTokens.length - a.honorTokens.length,
+  );
+  let previousTokenCount: number | undefined;
+  let currentRank = 0;
+  const rankedPlayers = sortedPlayers.map((player) => {
+    const tokenCount = player.honorTokens.length;
+    if (tokenCount !== previousTokenCount) {
+      currentRank += 1;
+      previousTokenCount = tokenCount;
+    }
+    return { player, rank: currentRank, tokenCount };
+  });
   const winners = sortedPlayers.filter((player) => gameState.gameWinners?.includes(player.id));
   const isGameOver = gameState.status === 'GAME_OVER';
   const roundStartIndex = gameState.actionLogs.findIndex(
@@ -80,7 +92,7 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
         <div className="inline-flex items-center justify-center gap-2">
           <div className="badge badge-primary">
             <Sparkles className="w-4 h-4" />
-            <span>{isGameOver ? 'KẾT THÚC TRẬN ĐẤU · MỐC 10 ĐIỂM' : `KẾT THÚC HIỆP ${gameState.currentRound}`}</span>
+            <span>{isGameOver ? 'KẾT THÚC TRẬN ĐẤU' : `KẾT THÚC HIỆP ${gameState.currentRound}`}</span>
           </div>
           <button
             type="button"
@@ -98,9 +110,6 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
             <h1 className="phase-title">
               🏆 BẬC THẦY NINJA TỐI CAO: {winners.map((player) => player.name).join(', ')}!
             </h1>
-            <p className="text-sm text-secondary mt-1">
-              Tổng điểm Danh Dự cao nhất: <strong className="text-white text-lg">{winners[0]?.totalScore} Điểm</strong>!
-            </p>
           </div>
         ) : (
           <div>
@@ -120,12 +129,12 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
       <div className="game-card game-card-section space-y-4">
         <h3 className="section-title">
           <Trophy className="w-5 h-5" />
-          <span>Bảng Xếp Hạng Điểm Danh Dự Tích Lũy</span>
+          <span>Bảng Xếp Hạng Phi Tiêu</span>
         </h3>
 
         <div className="space-y-2">
-          {sortedPlayers.map((player, index) => {
-            const isRank1 = index === 0;
+          {rankedPlayers.map(({ player, rank, tokenCount }) => {
+            const isRank1 = rank === 1;
 
             return (
               <div
@@ -135,7 +144,7 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
                 {/* Left: Rank & Player Info */}
                 <div className="flex items-center space-x-3 truncate">
                   <div className="badge leader-rank">
-                    #{index + 1}
+                    #{rank}
                   </div>
                   <div className="text-2xl">{player.avatar}</div>
                   <div className="truncate">
@@ -147,19 +156,13 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="player-card-status">
-                      Thẻ Danh Dự: [{player.honorTokens.map((t) => `${t.value}đ`).join(', ') || 'Chưa có'}]
-                    </div>
                   </div>
                 </div>
 
-                {/* Right: Total Points */}
+                {/* Right: Public honor-token count */}
                 <div className="text-right shrink-0">
                   <div className="text-xl font-bold text-white">
-                    {player.totalScore} <span className="text-xs text-secondary">điểm</span>
-                  </div>
-                  <div className="player-card-status">
-                    Hạ gục: {player.killsThisRound} Ninja
+                    {tokenCount} <span className="text-xs text-secondary">phi tiêu</span>
                   </div>
                 </div>
               </div>
