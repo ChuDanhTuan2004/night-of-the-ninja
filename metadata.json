@@ -1,0 +1,6 @@
+{
+  "name": "Night of the Ninja",
+  "description": "Trò chơi thẻ bài ẩn danh Night of the Ninja hỗ trợ nhiều người chơi trực tuyến, pass-and-play và AI Bot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
