@@ -9,6 +9,14 @@ export interface HouseCard {
   icon: string;
 }
 
+export interface ShapeshifterInspection {
+  targets: Array<{
+    playerId: string;
+    playerName: string;
+    house: HouseCard;
+  }>;
+}
+
 export type NinjaPhase = 'SPY' | 'MYSTIC' | 'TRICKSTER' | 'BLIND_ASSASSIN' | 'SHINOBI';
 export type CardPriority = 1 | 2 | 3 | 4 | 5 | 6;
 export type NinjaCardType = 'NORMAL' | 'TRICKSTER' | 'REACTION' | 'REVEAL';

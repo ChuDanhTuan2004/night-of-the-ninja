@@ -8,6 +8,7 @@ import {
   handleDraftPick,
   executeCardAction,
   evaluateRoundEnd,
+  inspectShapeshifterTargets,
 } from './src/utils/gameEngine';
 import { BOT_NAMES, AVATARS } from './src/data/cards';
 
@@ -270,6 +271,26 @@ app.post('/api/rooms/start', (req, res) => {
   broadcastRoomUpdate(code);
 
   res.json({ state: getStateForPlayer(startedState, playerId) });
+});
+
+// Private Shapeshifter inspection (does not resolve or broadcast the action)
+app.post('/api/rooms/inspect-shapeshifter', (req, res) => {
+  const { roomCode, playerId, cardId, targetId, secondTargetId } = req.body as {
+    roomCode: string;
+    playerId: string;
+    cardId: string;
+    targetId: string;
+    secondTargetId: string;
+  };
+  const code = roomCode?.toUpperCase();
+  const room = rooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Không tìm thấy phòng' });
+
+  const inspection = inspectShapeshifterTargets(room, playerId, cardId, targetId, secondTargetId);
+  if (!inspection) {
+    return res.status(400).json({ error: 'Không thể xem hai Role với lựa chọn hiện tại.' });
+  }
+  return res.json({ inspection });
 });
 
 // Game Action

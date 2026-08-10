@@ -6,12 +6,13 @@ import { DraftingView } from './components/DraftingView';
 import { ExecutionView } from './components/ExecutionView';
 import { RoundSummaryView } from './components/RoundSummaryView';
 import { GameRulesModal } from './components/GameRulesModal';
-import { GameState, GameMode, Player } from './types/game';
+import { GameState, GameMode, Player, ShapeshifterInspection } from './types/game';
 import {
   initializeNewGame,
   startRound,
   handleDraftPick,
   executeCardAction,
+  inspectShapeshifterTargets,
 } from './utils/gameEngine';
 import { AVATARS, BOT_NAMES } from './data/cards';
 
@@ -416,6 +417,43 @@ export default function App() {
     }
   };
 
+  const handleInspectShapeshifterTargets = async (
+    cardId: string,
+    targetId: string,
+    secondTargetId: string,
+  ): Promise<ShapeshifterInspection> => {
+    if (!gameState || !myPlayerId) throw new Error('Phiên chơi không còn hợp lệ.');
+
+    if (gameState.gameMode === 'ONLINE_ROOM') {
+      const res = await fetch('/api/rooms/inspect-shapeshifter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomCode: gameState.roomCode,
+          playerId: myPlayerId,
+          cardId,
+          targetId,
+          secondTargetId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.inspection) {
+        throw new Error(data.error || 'Không thể xem hai Role đã chọn.');
+      }
+      return data.inspection as ShapeshifterInspection;
+    }
+
+    const inspection = inspectShapeshifterTargets(
+      gameState,
+      myPlayerId,
+      cardId,
+      targetId,
+      secondTargetId,
+    );
+    if (!inspection) throw new Error('Không thể xem hai Role đã chọn.');
+    return inspection;
+  };
+
   // Handle Next Round
   const handleNextRound = async () => {
     if (!gameState) return;
@@ -551,6 +589,7 @@ export default function App() {
             gameState={gameState}
             currentPlayer={currentHumanPlayer!}
             onExecuteCardAction={handleExecuteCardAction}
+            onInspectShapeshifterTargets={handleInspectShapeshifterTargets}
           />
         ) : (
           <RoundSummaryView

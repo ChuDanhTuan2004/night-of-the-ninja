@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Crosshair, Scroll, Sparkles } from 'lucide-react';
-import { GameState, NinjaCard, NinjaPhase, Player } from '../types/game';
+import { GameState, NinjaCard, NinjaPhase, Player, ShapeshifterInspection } from '../types/game';
 import { sounds } from '../utils/audio';
 
 interface ExecutionViewProps {
@@ -13,6 +13,11 @@ interface ExecutionViewProps {
     secondTargetId?: string,
     decision?: string,
   ) => void;
+  onInspectShapeshifterTargets: (
+    cardId: string,
+    targetId: string,
+    secondTargetId: string,
+  ) => Promise<ShapeshifterInspection>;
 }
 
 const PHASE_STEPS: { phase: NinjaPhase; labelVi: string; icon: string }[] = [
@@ -48,11 +53,15 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
   gameState,
   currentPlayer,
   onExecuteCardAction,
+  onInspectShapeshifterTargets,
 }) => {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [secondTargetId, setSecondTargetId] = useState<string | null>(null);
   const [decision, setDecision] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<NinjaCard | null>(null);
+  const [shapeshifterInspection, setShapeshifterInspection] = useState<ShapeshifterInspection | null>(null);
+  const [inspectionError, setInspectionError] = useState<string | null>(null);
+  const [isInspecting, setIsInspecting] = useState(false);
 
   const queuedAction = useMemo(() => {
     const queue = gameState.players.flatMap((player, playerIndex) => {
@@ -70,7 +79,6 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
   const humanCardToPlay = queuedAction?.player.id === currentPlayer.id ? queuedAction.card : null;
   const phaseIndex = PHASE_STEPS.findIndex((step) => step.phase === gameState.executionPhase);
   const target = gameState.players.find((player) => player.id === selectedTargetId);
-  const secondTarget = gameState.players.find((player) => player.id === secondTargetId);
   const decisionOptions = activeCard ? DECISIONS[activeCard.effectType] : undefined;
 
   const resetPicker = () => {
@@ -78,6 +86,9 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     setSelectedTargetId(null);
     setSecondTargetId(null);
     setDecision(null);
+    setShapeshifterInspection(null);
+    setInspectionError(null);
+    setIsInspecting(false);
   };
 
   const startTargeting = (card: NinjaCard) => {
@@ -85,6 +96,8 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     setSelectedTargetId(null);
     setSecondTargetId(null);
     setDecision(null);
+    setShapeshifterInspection(null);
+    setInspectionError(null);
   };
 
   const confirmAction = () => {
@@ -104,10 +117,51 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
   };
 
   const isGraveDigger = activeCard?.effectType === 'GRAVE_DIGGER';
+  const isShapeshifter = activeCard?.effectType === 'SHAPESHIFTER';
   const visibleDiscard = gameState.ninjaDiscardPile.slice(0, 2);
   const needsSecondTarget = activeCard?.targetType === 'TWO_PLAYERS';
   const targetReady = isGraveDigger ? Boolean(selectedTargetId) || visibleDiscard.length === 0 : Boolean(selectedTargetId);
-  const canConfirm = targetReady && (!needsSecondTarget || Boolean(secondTargetId)) && (!decisionOptions || Boolean(decision));
+  const canConfirm = targetReady &&
+    (!needsSecondTarget || Boolean(secondTargetId)) &&
+    (!decisionOptions || Boolean(decision)) &&
+    (!isShapeshifter || Boolean(shapeshifterInspection));
+
+  const toggleShapeshifterTarget = (playerId: string) => {
+    setDecision(null);
+    setShapeshifterInspection(null);
+    setInspectionError(null);
+    if (selectedTargetId === playerId) {
+      setSelectedTargetId(secondTargetId);
+      setSecondTargetId(null);
+    } else if (secondTargetId === playerId) {
+      setSecondTargetId(null);
+    } else if (!selectedTargetId) {
+      setSelectedTargetId(playerId);
+    } else if (!secondTargetId) {
+      setSecondTargetId(playerId);
+    } else {
+      setSecondTargetId(playerId);
+    }
+  };
+
+  const inspectSelectedRoles = async () => {
+    if (!activeCard || !selectedTargetId || !secondTargetId || isInspecting) return;
+    setIsInspecting(true);
+    setInspectionError(null);
+    try {
+      const inspection = await onInspectShapeshifterTargets(
+        activeCard.id,
+        selectedTargetId,
+        secondTargetId,
+      );
+      setShapeshifterInspection(inspection);
+      sounds.playSpyWhisper();
+    } catch (error) {
+      setInspectionError(error instanceof Error ? error.message : 'Không thể xem hai Role đã chọn.');
+    } finally {
+      setIsInspecting(false);
+    }
+  };
 
   return (
     <div className="game-container-wide screen-stack">
@@ -235,12 +289,74 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                     </button>
                   )) : <p className="status-panel text-sm">Chồng bài bỏ đang trống. Kỹ năng không lấy được lá nào.</p>}
                 </div>
+              ) : isShapeshifter ? (
+                !shapeshifterInspection ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="form-label">Chọn đúng 2 người</label>
+                      <span className="badge">
+                        {[selectedTargetId, secondTargetId].filter(Boolean).length}/2 đã chọn
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+                      {gameState.players.filter((player) => player.isAlive).map((player) => {
+                        const selectionNumber = selectedTargetId === player.id
+                          ? 1
+                          : secondTargetId === player.id
+                            ? 2
+                            : null;
+                        return (
+                          <button
+                            key={player.id}
+                            type="button"
+                            onClick={() => toggleShapeshifterTarget(player.id)}
+                            className={`player-card justify-between ${selectionNumber ? 'is-selected' : ''}`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="text-xl">{player.avatar}</span>
+                              <span className="text-xs truncate">{player.name}</span>
+                            </span>
+                            {selectionNumber && <span className="badge badge-primary">#{selectionNumber}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-secondary">
+                      Sau khi chọn đủ hai người, bạn sẽ được xem bí mật Role của họ trước khi quyết định đổi.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="eyebrow text-center">Role bí mật bạn vừa xem</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {shapeshifterInspection.targets.map((inspectedTarget, index) => (
+                        <div key={inspectedTarget.playerId} className="status-panel text-center space-y-2">
+                          <div className="text-xs text-secondary">Người #{index + 1}</div>
+                          <div className="font-bold text-white">{inspectedTarget.playerName}</div>
+                          <div className="badge badge-primary justify-center">
+                            {inspectedTarget.house.icon} {inspectedTarget.house.nameVi}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShapeshifterInspection(null);
+                        setDecision(null);
+                      }}
+                      className="btn btn-ghost w-full"
+                    >
+                      Chọn lại hai người
+                    </button>
+                  </div>
+                )
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                  <label className="form-label">{needsSecondTarget ? 'Mục tiêu thứ nhất' : 'Chọn mục tiêu'}</label>
+                  <label className="form-label">Chọn mục tiêu</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {gameState.players
-                      .filter((player) => player.isAlive && (activeCard.effectType === 'SHAPESHIFTER' || player.id !== currentPlayer.id))
+                      .filter((player) => player.isAlive && player.id !== currentPlayer.id)
                       .filter((player) => activeCard.effectType !== 'THIEF' || player.honorTokens.length > currentPlayer.honorTokens.length)
                       .map((player) => (
                         <button key={player.id} onClick={() => { setSelectedTargetId(player.id); setSecondTargetId(null); setDecision(null); }} className={`player-card ${selectedTargetId === player.id ? 'is-selected' : ''}`}>
@@ -248,30 +364,14 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                         </button>
                       ))}
                   </div>
-
-                  {needsSecondTarget && selectedTargetId && (
-                    <div className="pt-3 space-y-2">
-                      <label className="form-label">Mục tiêu thứ hai</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {gameState.players.filter((player) => player.isAlive && player.id !== selectedTargetId).map((player) => (
-                          <button key={player.id} onClick={() => { setSecondTargetId(player.id); setDecision(null); }} className={`player-card ${secondTargetId === player.id ? 'is-selected' : ''}`}>
-                            <span className="text-xl">{player.avatar}</span><span className="text-xs truncate">{player.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {activeCard.effectType === 'SHAPESHIFTER' && target?.house && secondTarget?.house && (
-                <div className="status-panel text-sm">Bạn thấy: <strong>{target.name}</strong> là {target.house.nameVi}; <strong>{secondTarget.name}</strong> là {secondTarget.house.nameVi}.</div>
-              )}
               {['TROUBLEMAKER', 'SHINOBI_KILL'].includes(activeCard.effectType) && target?.house && (
                 <div className="status-panel text-sm">Bạn thấy House của <strong>{target.name}</strong>: {target.house.icon} <strong>{target.house.nameVi}</strong>.</div>
               )}
 
-              {decisionOptions && targetReady && (!needsSecondTarget || secondTargetId) && (
+              {decisionOptions && targetReady && (!needsSecondTarget || secondTargetId) && (!isShapeshifter || shapeshifterInspection) && (
                 <div className="space-y-2">
                   <label className="form-label">Quyết định bí mật của bạn</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -284,8 +384,22 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
 
               <div className="flex items-center space-x-3 pt-2">
                 <button onClick={resetPicker} className="btn btn-secondary flex-1">Hủy</button>
-                <button onClick={confirmAction} disabled={!canConfirm} className="btn btn-primary flex-1">Xác nhận</button>
+                {isShapeshifter && !shapeshifterInspection ? (
+                  <button
+                    type="button"
+                    onClick={inspectSelectedRoles}
+                    disabled={!selectedTargetId || !secondTargetId || isInspecting}
+                    className="btn btn-primary flex-1"
+                  >
+                    {isInspecting ? 'Đang xem…' : 'Bí mật xem 2 Role'}
+                  </button>
+                ) : (
+                  <button onClick={confirmAction} disabled={!canConfirm} className="btn btn-primary flex-1">
+                    Xác nhận quyết định
+                  </button>
+                )}
               </div>
+              {inspectionError && <div role="alert" className="text-xs text-center text-red-300">{inspectionError}</div>}
             </motion.div>
           </div>
         )}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { NINJA_CARDS } from '../src/data/cards';
-import { createHouseDeckForPlayerCount, evaluateRoundEnd, executeCardAction, initializeNewGame } from '../src/utils/gameEngine';
+import { createHouseDeckForPlayerCount, evaluateRoundEnd, executeCardAction, initializeNewGame, inspectShapeshifterTargets } from '../src/utils/gameEngine';
 import { GameState, HouseCard, Player } from '../src/types/game';
 
 function player(id: string): Player {
@@ -80,6 +80,39 @@ judgeState = {
 };
 judgeState = executeCardAction(judgeState, 'a', judge.id, 'b');
 assert.equal(judgeState.players.find((candidate) => candidate.id === 'b')?.isAlive, false, 'Judge phải bỏ qua Mirror Monk');
+
+const shapeshifter = NINJA_CARDS.find((card) => card.id === 'TRI_1')!;
+let shapeshifterState = initializeNewGame([player('a'), player('b'), player('c')], 'SOLO_BOTS');
+shapeshifterState = {
+  ...shapeshifterState,
+  status: 'EXECUTION',
+  executionPhase: 'TRICKSTER',
+  players: shapeshifterState.players.map((candidate) => {
+    if (candidate.id === 'a') return { ...candidate, house: house('LOTUS', 1), selectedCards: [shapeshifter] };
+    if (candidate.id === 'b') return { ...candidate, house: house('CRANE', 1) };
+    return { ...candidate, house: house('RONIN', null) };
+  }),
+};
+const inspection = inspectShapeshifterTargets(shapeshifterState, 'a', shapeshifter.id, 'b', 'c');
+assert.deepEqual(
+  inspection?.targets.map((target) => target.house.type),
+  ['CRANE', 'RONIN'],
+  'Kẻ biến hình phải xem được đúng Role của hai người đã chọn',
+);
+assert.equal(
+  inspectShapeshifterTargets(shapeshifterState, 'a', shapeshifter.id, 'b', 'b'),
+  null,
+  'Kẻ biến hình không được chọn cùng một người hai lần',
+);
+const unresolvedShapeshifter = executeCardAction(shapeshifterState, 'a', shapeshifter.id, 'b', 'c');
+assert.equal(
+  unresolvedShapeshifter.players.find((candidate) => candidate.id === 'a')?.playedCardsThisPhase.length,
+  0,
+  'Kẻ biến hình chưa được resolve trước khi chọn Đổi hoặc Giữ nguyên',
+);
+const swappedShapeshifter = executeCardAction(shapeshifterState, 'a', shapeshifter.id, 'b', 'c', 'SWAP');
+assert.equal(swappedShapeshifter.players.find((candidate) => candidate.id === 'b')?.house?.type, 'RONIN');
+assert.equal(swappedShapeshifter.players.find((candidate) => candidate.id === 'c')?.house?.type, 'CRANE');
 
 const rankingBase = initializeNewGame([player('a'), player('b'), player('c')], 'SOLO_BOTS');
 const rankingState: GameState = {

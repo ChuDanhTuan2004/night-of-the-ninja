@@ -7,6 +7,7 @@ import {
   NinjaCard,
   NinjaPhase,
   Player,
+  ShapeshifterInspection,
 } from '../types/game';
 import { HOUSES, createFullNinjaDeck, createInitialHonorDeck, shuffleArray } from '../data/cards';
 import {
@@ -218,6 +219,38 @@ function getNextAction(state: GameState): { player: Player; card: NinjaCard } | 
   return queue[0] ?? null;
 }
 
+export function inspectShapeshifterTargets(
+  state: GameState,
+  actorId: string,
+  cardId: string,
+  targetId: string,
+  secondTargetId: string,
+): ShapeshifterInspection | null {
+  if (state.status !== 'EXECUTION') return null;
+  const queuedAction = getNextAction(state);
+  if (
+    !queuedAction ||
+    queuedAction.player.id !== actorId ||
+    queuedAction.card.id !== cardId ||
+    queuedAction.card.effectType !== 'SHAPESHIFTER' ||
+    targetId === secondTargetId
+  ) {
+    return null;
+  }
+
+  const targets = [targetId, secondTargetId].map((id) =>
+    state.players.find((player) => player.id === id && player.isAlive));
+  if (targets.some((player) => !player?.house)) return null;
+
+  return {
+    targets: targets.map((player) => ({
+      playerId: player!.id,
+      playerName: player!.name,
+      house: player!.house!,
+    })),
+  };
+}
+
 export function processNextExecutionStep(state: GameState): GameState {
   if (state.status !== 'EXECUTION') return state;
   const action = getNextAction(state);
@@ -264,6 +297,17 @@ export function executeCardAction(
 
   const actor = queuedAction.player;
   const card = queuedAction.card;
+  if (card.effectType === 'SHAPESHIFTER') {
+    const validDecision = decision === 'KEEP' || decision === 'SWAP';
+    if (
+      !targetId ||
+      !secondTargetId ||
+      !validDecision ||
+      !inspectShapeshifterTargets(state, actorId, cardId, targetId, secondTargetId)
+    ) {
+      return state;
+    }
+  }
   let nextState: GameState = {
     ...state,
     executionStep: state.executionStep + 1,
