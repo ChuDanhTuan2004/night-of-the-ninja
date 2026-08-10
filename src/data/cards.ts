@@ -69,7 +69,7 @@ const tricksters: NinjaCard[] = [
     id: 'TRI_2', name: 'Grave Digger', nameVi: 'Kẻ đào mộ', cardType: 'TRICKSTER',
     phase: 'TRICKSTER', priority: 2, phaseNameVi: PHASE_NAMES.TRICKSTER,
     descriptionVi: 'Xem hai Ninja card trong chồng bỏ của Draft và lấy một lá.',
-    effectType: 'GRAVE_DIGGER', requiresTarget: true, targetType: 'DISCARD_CARD', icon: '🪦',
+    effectType: 'GRAVE_DIGGER', requiresTarget: true, targetType: 'DISCARD_CARD', icon: '⚰️',
   },
   {
     id: 'TRI_3', name: 'Troublemaker', nameVi: 'Kẻ gây rối', cardType: 'TRICKSTER',

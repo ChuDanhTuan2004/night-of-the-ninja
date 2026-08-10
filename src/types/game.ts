@@ -120,4 +120,5 @@ export interface GameState {
   privateNotices?: Record<string, string[]>;
   gameWinners?: string[];
   botBeliefs?: Record<string, Record<string, HouseBelief>>;
+  pendingCard?: { playerId: string; card: NinjaCard } | null;
 }

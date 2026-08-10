@@ -64,6 +64,13 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
   const [isInspecting, setIsInspecting] = useState(false);
 
   const queuedAction = useMemo(() => {
+    if (gameState.pendingCard) {
+      const player = gameState.players.find((p) => p.id === gameState.pendingCard!.playerId);
+      const playerIndex = gameState.players.findIndex((p) => p.id === gameState.pendingCard!.playerId);
+      if (player && player.isAlive) {
+        return { player, playerIndex, card: gameState.pendingCard!.card };
+      }
+    }
     const queue = gameState.players.flatMap((player, playerIndex) => {
       if (!player.isAlive) return [];
       return player.selectedCards
@@ -74,7 +81,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     });
     queue.sort((a, b) => (a.card.priority ?? 99) - (b.card.priority ?? 99) || a.playerIndex - b.playerIndex);
     return queue[0] ?? null;
-  }, [gameState.executionPhase, gameState.players]);
+  }, [gameState.executionPhase, gameState.players, gameState.pendingCard]);
 
   const humanCardToPlay = queuedAction?.player.id === currentPlayer.id ? queuedAction.card : null;
   const phaseIndex = PHASE_STEPS.findIndex((step) => step.phase === gameState.executionPhase);
@@ -284,8 +291,20 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 <div className="space-y-2">
                   <label className="form-label">Hai lá trên chồng bỏ</label>
                   {visibleDiscard.length ? visibleDiscard.map((card) => (
-                    <button key={card.id} onClick={() => setSelectedTargetId(card.id)} className={`player-card w-full ${selectedTargetId === card.id ? 'is-selected' : ''}`}>
-                      <span className="text-xl">{card.icon}</span><span className="text-sm">{card.nameVi} · {card.phaseNameVi} {card.priority ?? ''}</span>
+                    <button
+                      key={card.id}
+                      onClick={() => setSelectedTargetId(card.id)}
+                      className={`player-card w-full flex items-start gap-3 p-3 text-left ${selectedTargetId === card.id ? 'is-selected' : ''}`}
+                    >
+                      <span className="text-2xl mt-1 shrink-0">{card.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-white">
+                          {card.nameVi} • {card.phaseNameVi} {card.priority ? `(P${card.priority})` : ''}
+                        </div>
+                        <div className="text-xs text-secondary mt-1 whitespace-normal leading-normal">
+                          {card.descriptionVi}
+                        </div>
+                      </div>
                     </button>
                   )) : <p className="status-panel text-sm">Chồng bài bỏ đang trống. Kỹ năng không lấy được lá nào.</p>}
                 </div>

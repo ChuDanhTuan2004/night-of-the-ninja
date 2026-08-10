@@ -137,6 +137,7 @@ export function startRound(state: GameState, roundNum: number): GameState {
     privateNotices: {},
     gameWinners: [],
     botBeliefs: initializeBotBeliefs(players),
+    pendingCard: null,
     actionLogs: [
       logEntry(`— HIỆP ${roundNum} BẮT ĐẦU — House đã được phát bí mật.`, 'INFO', { phase: 'ROUND_START' }),
       ...state.actionLogs,
@@ -207,6 +208,12 @@ export function processBotDraftingIfNeeded(state: GameState): GameState {
 }
 
 function getNextAction(state: GameState): { player: Player; card: NinjaCard } | null {
+  if (state.pendingCard) {
+    const player = state.players.find((p) => p.id === state.pendingCard!.playerId);
+    if (player && player.isAlive) {
+      return { player, card: state.pendingCard!.card };
+    }
+  }
   const queue = state.players.flatMap((player, playerIndex) => {
     if (!player.isAlive) return [];
     return player.selectedCards
@@ -314,6 +321,7 @@ export function executeCardAction(
     players: state.players.map((player) => player.id === actorId
       ? { ...player, playedCardsThisPhase: [...player.playedCardsThisPhase, card] }
       : player),
+    pendingCard: state.pendingCard && state.pendingCard.card.id === cardId ? null : state.pendingCard,
   };
   const logs = [...nextState.actionLogs];
 
@@ -400,27 +408,32 @@ export function executeCardAction(
       const visibleDiscard = nextState.ninjaDiscardPile.slice(0, 2);
       const recovered = visibleDiscard.find((candidate) => candidate.id === targetId);
       if (recovered) {
-        const recoveredPhaseIndex = recovered.phase ? NIGHT_PHASES.indexOf(recovered.phase) : -1;
-        const currentPhaseIndex = NIGHT_PHASES.indexOf(nextState.executionPhase);
-        const timingHasPassed = recovered.phase !== null && (
-          recoveredPhaseIndex < currentPhaseIndex ||
-          (recoveredPhaseIndex === currentPhaseIndex && (recovered.priority ?? 0) <= (card.priority ?? 0))
-        );
         nextState.ninjaDiscardPile = nextState.ninjaDiscardPile.filter((candidate) => candidate.id !== recovered.id);
         nextState.players = nextState.players.map((player) => player.id === actorId
           ? {
               ...player,
               selectedCards: [...player.selectedCards, recovered],
-              playedCardsThisPhase: timingHasPassed
-                ? [...player.playedCardsThisPhase, recovered]
-                : player.playedCardsThisPhase,
             }
           : player);
-        addPrivateNotice(
-          actorId,
-          `🪦 Bạn lấy [${recovered.nameVi}] từ chồng bài bỏ.${timingHasPassed ? ' Timing của lá này đã qua nên không thể dùng trong hiệp.' : ''}`,
-        );
-        logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] và lấy một Ninja card từ chồng bỏ.`, 'ACTION', { phase, actorId }));
+
+        const isReactiveOrReveal = recovered.cardType === 'REACTION' || recovered.cardType === 'REVEAL' || recovered.phase === null;
+        if (!isReactiveOrReveal) {
+          nextState.pendingCard = {
+            playerId: actorId,
+            card: recovered,
+          };
+          addPrivateNotice(
+            actorId,
+            `🪦 Bạn lấy [${recovered.nameVi}] từ chồng bài bỏ và phải sử dụng lập tức!`,
+          );
+          logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] lấy lá [${recovered.nameVi}] từ chồng bỏ và phải dùng lập tức.`, 'ACTION', { phase, actorId }));
+        } else {
+          addPrivateNotice(
+            actorId,
+            `🪦 Bạn lấy [${recovered.nameVi}] từ chồng bài bỏ và giữ lá này để sử dụng khi đủ điều kiện.`,
+          );
+          logs.unshift(logEntry(`${actor.name} dùng [${card.nameVi}] lấy lá phản ứng/reveal [${recovered.nameVi}] từ chồng bỏ.`, 'ACTION', { phase, actorId }));
+        }
       }
       break;
     }
