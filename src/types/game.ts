@@ -5,8 +5,6 @@ export interface HouseCard {
   type: HouseType;
   nameVi: string;
   descriptionVi: string;
-  color: string;
-  bgGradient: string;
   icon: string;
 }
 

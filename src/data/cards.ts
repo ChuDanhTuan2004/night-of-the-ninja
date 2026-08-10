@@ -6,8 +6,6 @@ export const HOUSES: Record<string, HouseCard> = {
     type: 'LOTUS',
     nameVi: 'Gia Tộc Hoa Sen',
     descriptionVi: 'Mục tiêu: Đảm bảo Gia Tộc Hoa Sen có người sống sót và tiêu diệt kẻ thù Gia Tộc Hạc!',
-    color: '#F43F5E',
-    bgGradient: 'from-rose-950 via-rose-900 to-slate-950',
     icon: '🌸',
   },
   CRANE: {
@@ -15,8 +13,6 @@ export const HOUSES: Record<string, HouseCard> = {
     type: 'CRANE',
     nameVi: 'Gia Tộc Chim Hạc',
     descriptionVi: 'Mục tiêu: Đảm bảo Gia Tộc Chim Hạc có người sống sót và quét sạch phe Hoa Sen!',
-    color: '#0EA5E9',
-    bgGradient: 'from-sky-950 via-sky-900 to-slate-950',
     icon: '🦩',
   },
   RONIN: {
@@ -24,8 +20,6 @@ export const HOUSES: Record<string, HouseCard> = {
     type: 'RONIN',
     nameVi: 'Lãng Khách Ronin',
     descriptionVi: 'Mục tiêu: Bạn không thuộc phe nào. Sống sót một mình hoặc trở thành người duy nhất trụ lại!',
-    color: '#F59E0B',
-    bgGradient: 'from-amber-950 via-amber-900 to-slate-950',
     icon: '⚔️',
   },
 };

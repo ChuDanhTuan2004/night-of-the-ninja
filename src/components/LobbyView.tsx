@@ -51,41 +51,33 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
   if (!roomCode) {
     return (
-      <div className="min-h-[85vh] flex flex-col items-center justify-center p-4">
+      <div className="game-container min-h-[calc(100vh-140px)] flex flex-col items-center justify-center">
         {/* Hero Title */}
         <div className="text-center max-w-xl mx-auto mb-8 space-y-3">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-950/80 border border-rose-500/40 text-rose-300 text-xs font-mono font-bold tracking-wider uppercase shadow-lg">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <div className="badge badge-primary">
+            <Sparkles className="w-4 h-4" />
             <span>GAME BÀI BẤT NGỜ • ẨN DANH & CHIẾN THUẬT</span>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-black font-serif text-transparent bg-clip-text bg-gradient-to-r from-amber-100 via-rose-200 to-amber-300 tracking-wide drop-shadow-md">
+          <h1 className="hero-title tracking-wide">
             NIGHT OF THE NINJA
           </h1>
-          <p className="text-slate-300 text-sm sm:text-base leading-relaxed font-sans">
+          <p className="text-secondary text-sm sm:text-base leading-relaxed">
             Gia Tộc Hoa Sen & Chim Hạc đụng độ trong bóng đêm! Đoán thân phận, tuyển chọn Ninja, tung đao ám sát và tích lũy Thẻ Danh Dự vinh quang!
           </p>
         </div>
 
         {/* Tab Selection */}
-        <div className="max-w-md w-full bg-slate-900/90 border border-amber-600/40 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
-          <div className="flex border-b border-amber-900/40 pb-4 mb-6 gap-2">
+        <div className="game-card game-card-section max-w-md w-full">
+          <div className="segmented-control mb-6">
             <button
               onClick={() => setTab('CREATE')}
-              className={`flex-1 py-2.5 rounded-xl font-bold font-serif text-sm transition-all ${
-                tab === 'CREATE'
-                  ? 'bg-amber-500 text-slate-950 shadow-lg'
-                  : 'bg-slate-800 text-slate-400 hover:text-amber-200'
-              }`}
+              className={`btn ${tab === 'CREATE' ? 'btn-primary' : 'btn-ghost'}`}
             >
               Tạo Phòng Mới
             </button>
             <button
               onClick={() => setTab('JOIN')}
-              className={`flex-1 py-2.5 rounded-xl font-bold font-serif text-sm transition-all ${
-                tab === 'JOIN'
-                  ? 'bg-amber-500 text-slate-950 shadow-lg'
-                  : 'bg-slate-800 text-slate-400 hover:text-amber-200'
-              }`}
+              className={`btn ${tab === 'JOIN' ? 'btn-primary' : 'btn-ghost'}`}
             >
               Vào Phòng Có Sẵn
             </button>
@@ -94,68 +86,56 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           {tab === 'CREATE' ? (
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-amber-300 font-mono mb-1.5 uppercase">
+                <label className="form-label">
                   Tên Của Bạn (Trưởng Môn)
                 </label>
                 <input
                   type="text"
                   value={hostName}
                   onChange={(e) => setHostName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-amber-700/50 text-amber-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 text-sm font-medium"
+                  className="form-control"
                   placeholder="Nhập tên nhân vật..."
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-amber-300 font-mono mb-2 uppercase">
+                <label className="form-label">
                   Chế Độ Chơi
                 </label>
-                <div className="grid grid-cols-1 gap-2.5">
+                <div className="grid grid-cols-1 gap-3">
                   <button
                     type="button"
                     onClick={() => onSetGameMode('SOLO_BOTS')}
-                    className={`p-3 rounded-xl border text-left transition-all flex items-start space-x-3 ${
-                      gameMode === 'SOLO_BOTS'
-                        ? 'bg-amber-950/80 border-amber-400 text-amber-200 shadow-lg'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-amber-700/40'
-                    }`}
+                    className={`mode-option ${gameMode === 'SOLO_BOTS' ? 'is-selected' : ''}`}
                   >
-                    <Bot className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                    <Bot className="w-5 h-5 mt-1 shrink-0" />
                     <div>
-                      <div className="font-bold text-sm text-amber-100 font-serif">Chơi Với AI Bot (Solo)</div>
-                      <div className="text-xs text-slate-400">Tự động thêm 4 Bot AI thông minh. Vào chơi ngay lập tức!</div>
+                      <div className="font-semibold text-sm text-white">Chơi Với AI Bot (Solo)</div>
+                      <div className="text-xs text-secondary">Tự động thêm 4 Bot AI thông minh. Vào chơi ngay lập tức!</div>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => onSetGameMode('PASS_AND_PLAY')}
-                    className={`p-3 rounded-xl border text-left transition-all flex items-start space-x-3 ${
-                      gameMode === 'PASS_AND_PLAY'
-                        ? 'bg-amber-950/80 border-amber-400 text-amber-200 shadow-lg'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-amber-700/40'
-                    }`}
+                    className={`mode-option ${gameMode === 'PASS_AND_PLAY' ? 'is-selected' : ''}`}
                   >
-                    <ShieldAlert className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+                    <ShieldAlert className="w-5 h-5 mt-1 shrink-0" />
                     <div>
-                      <div className="font-bold text-sm text-amber-100 font-serif">Pass & Play (Cùng 1 Màn Hình)</div>
-                      <div className="text-xs text-slate-400">Chơi trực tiếp trên 1 thiết bị, có màn hình che thẻ bảo mật!</div>
+                      <div className="font-semibold text-sm text-white">Pass & Play (Cùng 1 Màn Hình)</div>
+                      <div className="text-xs text-secondary">Chơi trực tiếp trên 1 thiết bị, có màn hình che thẻ bảo mật!</div>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => onSetGameMode('ONLINE_ROOM')}
-                    className={`p-3 rounded-xl border text-left transition-all flex items-start space-x-3 ${
-                      gameMode === 'ONLINE_ROOM'
-                        ? 'bg-amber-950/80 border-amber-400 text-amber-200 shadow-lg'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-amber-700/40'
-                    }`}
+                    className={`mode-option ${gameMode === 'ONLINE_ROOM' ? 'is-selected' : ''}`}
                   >
-                    <Users className="w-5 h-5 text-sky-400 mt-0.5 shrink-0" />
+                    <Users className="w-5 h-5 mt-1 shrink-0" />
                     <div>
-                      <div className="font-bold text-sm text-amber-100 font-serif">Phòng Trực Tuyến</div>
-                      <div className="text-xs text-slate-400">Tạo mã phòng chia sẻ cho bạn bè ở nhiều thiết bị cùng vào!</div>
+                      <div className="font-semibold text-sm text-white">Phòng Trực Tuyến</div>
+                      <div className="text-xs text-secondary">Tạo mã phòng chia sẻ cho bạn bè ở nhiều thiết bị cùng vào!</div>
                     </div>
                   </button>
                 </div>
@@ -164,7 +144,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <button
                 onClick={() => onCreateRoom(hostName, gameMode)}
                 disabled={isBusy || !hostName.trim()}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-slate-950 font-bold font-serif text-base shadow-xl transition-all flex items-center justify-center space-x-2"
+                className="btn btn-primary btn-cta"
               >
                 <Play className="w-5 h-5 fill-current" />
                 <span>{isBusy ? 'Đang Khởi Tạo…' : 'Khởi Tạo Phòng Ngay!'}</span>
@@ -173,28 +153,28 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-amber-300 font-mono mb-1.5 uppercase">
+                <label className="form-label">
                   Mã Phòng (5 Ký Tự)
                 </label>
                 <input
                   type="text"
                   value={joinCodeInput}
                   onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-amber-700/50 text-amber-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 text-base font-mono font-bold tracking-widest uppercase"
+                  className="form-control font-mono font-bold tracking-widest uppercase"
                   placeholder="VD: NINJA"
                   maxLength={5}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-amber-300 font-mono mb-1.5 uppercase">
+                <label className="form-label">
                   Tên Của Bạn
                 </label>
                 <input
                   type="text"
                   value={joinNameInput}
                   onChange={(e) => setJoinNameInput(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-amber-700/50 text-amber-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 text-sm font-medium"
+                  className="form-control"
                   placeholder="Nhập biệt hiệu Ninja..."
                 />
               </div>
@@ -202,7 +182,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               <button
                 onClick={() => onJoinRoom(joinCodeInput, joinNameInput)}
                 disabled={isBusy || !joinCodeInput.trim() || !joinNameInput.trim()}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold font-serif text-base shadow-xl transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                className="btn btn-primary btn-cta"
               >
                 <Users className="w-5 h-5" />
                 <span>{isBusy ? 'Đang Tham Gia…' : 'Tham Gia Phòng!'}</span>
@@ -216,27 +196,27 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
   // Waiting Lobby View
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6 min-h-[85vh] flex flex-col justify-center">
+    <div className="game-container screen-stack min-h-[calc(100vh-140px)] justify-center">
       {/* Lobby Header Card */}
-      <div className="bg-slate-900/90 border border-amber-600/40 rounded-2xl p-6 shadow-2xl backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="game-card game-card-section flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-mono text-amber-400 uppercase tracking-widest">
+          <div className="eyebrow">
             PHÒNG CHỜ NINJA • {gameMode === 'SOLO_BOTS' ? 'ĐẤU BOT AI' : gameMode === 'PASS_AND_PLAY' ? 'PASS & PLAY' : 'TRỰC TUYẾN'}
           </div>
-          <h2 className="text-3xl font-bold font-serif text-amber-200 mt-1">
-            Mã Phòng: <span className="font-mono text-amber-400">{roomCode}</span>
+          <h2 className="phase-title mt-1">
+            Mã Phòng: <span className="font-mono">{roomCode}</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Yêu cầu từ <strong className="text-amber-300">4 đến 11 người chơi</strong>. Hiện tại: <strong className="text-amber-300">{players.length} Ninja</strong>.
+          <p className="text-xs text-secondary mt-1">
+            Yêu cầu từ <strong>4 đến 11 người chơi</strong>. Hiện tại: <strong>{players.length} Ninja</strong>.
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
           <button
             onClick={handleCopyCode}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-center space-x-1.5 transition-all"
+            className="btn btn-secondary"
           >
-            {copiedCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             <span>{copiedCode ? 'Đã Sa Chép!' : 'Sao Chép Mã'}</span>
           </button>
 
@@ -244,9 +224,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             <button
               onClick={onAddBot}
               disabled={players.length >= 11}
-              className="px-4 py-2 rounded-xl bg-amber-950 hover:bg-amber-900 border border-amber-500/40 text-amber-200 text-xs font-bold flex items-center space-x-1.5 transition-all disabled:opacity-50"
+              className="btn btn-secondary"
             >
-              <Plus className="w-4 h-4 text-amber-400" />
+              <Plus className="w-4 h-4" />
               <span>Thêm AI Bot</span>
             </button>
           )}
@@ -254,9 +234,9 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       </div>
 
       {/* Players Grid */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-        <h3 className="text-sm font-bold font-mono text-amber-300 uppercase tracking-wider mb-4 flex items-center space-x-2">
-          <Users className="w-4 h-4 text-amber-400" />
+      <div className="game-card game-card-section">
+        <h3 className="section-title mb-4">
+          <Users className="w-5 h-5" />
           <span>Danh Sách Ninja Tham Gia ({players.length}/11)</span>
         </h3>
 
@@ -279,12 +259,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               onChange={(event) => setLocalPlayerName(event.target.value)}
               maxLength={24}
               placeholder="Tên người chơi tiếp theo…"
-              className="flex-1 px-4 py-2.5 rounded-xl bg-slate-950 border border-amber-700/50 text-amber-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 text-sm"
+              className="form-control flex-1"
             />
             <button
               type="submit"
               disabled={!localPlayerName.trim() || players.length >= 11}
-              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-sm disabled:opacity-50"
+              className="btn btn-primary"
             >
               Thêm Người Chơi
             </button>
@@ -295,18 +275,18 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           {players.map((p, idx) => (
             <div
               key={p.id}
-              className="bg-slate-950 border border-amber-900/40 rounded-xl p-3 flex items-center justify-between shadow-md relative group"
+              className="player-card justify-between relative group"
             >
               <div className="flex items-center space-x-3 truncate">
-                <div className="w-10 h-10 rounded-lg bg-amber-950/60 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">
+                <div className="avatar">
                   {p.avatar || AVATARS[idx % AVATARS.length]}
                 </div>
                 <div className="truncate">
-                  <div className="font-bold text-sm text-amber-100 truncate flex items-center space-x-1">
+                  <div className="player-card-name flex items-center space-x-1">
                     <span>{p.name}</span>
-                    {p.isHost && <span className="text-[10px] text-amber-400 font-mono">(Host)</span>}
+                    {p.isHost && <span className="badge px-2 min-h-0">Host</span>}
                   </div>
-                  <div className="text-[10px] text-slate-400 font-mono">
+                  <div className="player-card-status">
                     {p.isBot ? '🤖 AI Bot' : '👤 Người chơi'}
                   </div>
                 </div>
@@ -315,7 +295,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
               {isHost && (p.isBot || (gameMode === 'PASS_AND_PLAY' && !p.isHost)) && (
                 <button
                   onClick={() => onRemoveBot(p.id)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                  className="btn btn-ghost btn-icon"
                   title="Xóa người chơi"
                   aria-label={`Xóa ${p.name}`}
                 >
@@ -327,7 +307,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         </div>
 
         {!isLobbyReadyToStart && (
-          <div className="mt-4 p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs text-center font-mono">
+          <div className="status-panel mt-4 text-xs text-center">
             ⚠️ Cần ít nhất 4 người chơi để bắt đầu! Nhấn "Thêm AI Bot" nếu thiếu người.
           </div>
         )}
@@ -335,11 +315,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
       {/* Start Action */}
       {isHost && (
-        <div className="text-center">
+        <div className="bottom-action-bar">
           <button
             onClick={onStartGame}
             disabled={!isLobbyReadyToStart || isBusy}
-            className="px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-slate-950 font-black font-serif text-lg shadow-2xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:transform-none"
+            className="btn btn-primary btn-cta"
           >
             {isBusy ? 'ĐANG CHUẨN BỊ TRẬN ĐẤU…' : '⚔️ BẮT ĐẦU TRẬN ĐẤU NIGHT OF THE NINJA!'}
           </button>

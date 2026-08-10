@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MotionConfig } from 'motion/react';
 import { Header } from './components/Header';
 import { LobbyView } from './components/LobbyView';
 import { DraftingView } from './components/DraftingView';
@@ -484,7 +485,8 @@ export default function App() {
     gameState?.players.find((p) => p.id === activePlayerId) || gameState?.players[0];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col justify-between">
+    <MotionConfig reducedMotion="user">
+    <div className="app-shell">
       {/* Header */}
       <Header
         roomCode={gameState?.roomCode}
@@ -496,9 +498,9 @@ export default function App() {
       />
 
       {/* Main Game Screen View Routing */}
-      <main className="flex-1 container mx-auto px-2 py-4">
+      <main className="game-main">
         {actionError ? (
-          <div role="alert" className="max-w-4xl mx-auto mb-3 px-4 py-3 rounded-xl border border-rose-500/40 bg-rose-950/70 text-rose-200 text-sm">
+          <div role="alert" className="toast toast-error">
             {actionError}
           </div>
         ) : null}
@@ -549,5 +551,6 @@ export default function App() {
       {/* Game Rules Modal */}
       <GameRulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
     </div>
+    </MotionConfig>
   );
 }
