@@ -59,7 +59,7 @@ export interface Player {
   
   // Hand & Selection
   draftHand: NinjaCard[];
-  selectedCards: NinjaCard[]; // Up to 3 cards picked during drafting phase
+  selectedCards: NinjaCard[]; // Exactly 2 cards kept after drafting
   playedCardsThisPhase: NinjaCard[];
   
   // Status flags during execution
@@ -92,7 +92,7 @@ export type GameStatus =
   | 'ROUND_SUMMARY'
   | 'GAME_OVER';
 
-export type GameMode = 'SOLO_BOTS' | 'PASS_AND_PLAY' | 'ONLINE_ROOM';
+export type GameMode = 'SOLO_BOTS' | 'ONLINE_ROOM';
 
 export interface GameState {
   roomCode: string;
@@ -100,18 +100,16 @@ export interface GameState {
   gameMode: GameMode;
   currentRound: number; // 1, 2, or 3
   maxRounds: number; // 3
+  draftPickNumber: 1 | 2;
   
   // Execution Sub-phase
   executionRank: CardRank; // 1, 2, 3, or 4
   executionStep: number; // Index of current acting card in queue
   
-  // Pass & Play active turn tracker
-  passAndPlayCurrentPlayerId: string | null;
-  passAndPlayRevealed: boolean;
-
   players: Player[];
   honorDeck: HonorToken[];
   ninjaDeck: NinjaCard[];
+  ninjaDiscardPile: NinjaCard[];
   
   // Round results
   roundWinnerClan: HouseType | 'DRAW' | null;

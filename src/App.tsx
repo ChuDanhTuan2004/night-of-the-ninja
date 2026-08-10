@@ -5,7 +5,6 @@ import { LobbyView } from './components/LobbyView';
 import { DraftingView } from './components/DraftingView';
 import { ExecutionView } from './components/ExecutionView';
 import { RoundSummaryView } from './components/RoundSummaryView';
-import { PassAndPlayCover } from './components/PassAndPlayCover';
 import { GameRulesModal } from './components/GameRulesModal';
 import { GameState, GameMode, Player } from './types/game';
 import {
@@ -16,7 +15,7 @@ import {
 } from './utils/gameEngine';
 import { AVATARS, BOT_NAMES } from './data/cards';
 
-const SESSION_STORAGE_KEY = 'night-of-the-ninja-session-v1';
+const SESSION_STORAGE_KEY = 'night-of-the-ninja-session-v2';
 
 interface PersistedSession {
   gameState: GameState | null;
@@ -45,12 +44,6 @@ export default function App() {
     initialSession?.gameMode ?? 'SOLO_BOTS'
   );
   const [isRulesOpen, setIsRulesOpen] = useState(false);
-  const [showPassCover, setShowPassCover] = useState(
-    initialSession?.gameState?.gameMode === 'PASS_AND_PLAY' &&
-      initialSession.gameState.status !== 'LOBBY' &&
-      initialSession.gameState.status !== 'ROUND_SUMMARY' &&
-      initialSession.gameState.status !== 'GAME_OVER'
-  );
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -199,34 +192,6 @@ export default function App() {
     }
   };
 
-  const handleAddLocalPlayer = (playerName: string) => {
-    if (!gameState || gameState.gameMode !== 'PASS_AND_PLAY') return;
-    const trimmedName = playerName.trim();
-    if (!trimmedName || gameState.players.length >= 11) return;
-
-    const newPlayer: Player = {
-      id: `player-local-${Date.now()}`,
-      name: trimmedName,
-      avatar: AVATARS[gameState.players.length % AVATARS.length],
-      isBot: false,
-      isHost: false,
-      isReady: true,
-      house: null,
-      revealedHouse: false,
-      isAlive: true,
-      draftHand: [],
-      selectedCards: [],
-      playedCardsThisPhase: [],
-      isProtected: false,
-      retaliateOnDeath: false,
-      honorTokens: [],
-      totalScore: 0,
-      killsThisRound: 0,
-    };
-
-    setGameState({ ...gameState, players: [...gameState.players, newPlayer] });
-  };
-
   // Handle Add AI Bot
   const handleAddBot = async () => {
     if (!gameState) return;
@@ -319,7 +284,6 @@ export default function App() {
     } else {
       const started = startRound(gameState, 1);
       setGameState(started);
-      if (gameState.gameMode === 'PASS_AND_PLAY') setShowPassCover(true);
       setPendingAction(null);
     }
   };
@@ -328,10 +292,7 @@ export default function App() {
   const handlePickCard = async (cardId: string) => {
     if (!gameState || !myPlayerId || pendingAction) return;
 
-    const actorId =
-      gameState.gameMode === 'PASS_AND_PLAY'
-        ? gameState.passAndPlayCurrentPlayerId
-        : myPlayerId;
+    const actorId = myPlayerId;
     if (!actorId) return;
     setPendingAction('PICK');
 
@@ -359,10 +320,6 @@ export default function App() {
       const nextState = handleDraftPick(gameState, actorId, cardId);
       setGameState(nextState);
 
-      // Handle Pass & Play screen cover if active
-      if (gameState.gameMode === 'PASS_AND_PLAY') {
-        setShowPassCover(true);
-      }
       setPendingAction(null);
     }
   };
@@ -375,10 +332,7 @@ export default function App() {
   ) => {
     if (!gameState || !myPlayerId || pendingAction) return;
 
-    const actorId =
-      gameState.gameMode === 'PASS_AND_PLAY'
-        ? gameState.passAndPlayCurrentPlayerId
-        : myPlayerId;
+    const actorId = myPlayerId;
     if (!actorId) return;
     setPendingAction('EXECUTE');
 
@@ -415,13 +369,6 @@ export default function App() {
         secondTargetId
       );
       setGameState(nextState);
-      if (
-        gameState.gameMode === 'PASS_AND_PLAY' &&
-        nextState.status === 'EXECUTION' &&
-        nextState.passAndPlayCurrentPlayerId !== actorId
-      ) {
-        setShowPassCover(true);
-      }
       setPendingAction(null);
     }
   };
@@ -450,7 +397,6 @@ export default function App() {
       if (gameState.currentRound < gameState.maxRounds) {
         const nextState = startRound(gameState, gameState.currentRound + 1);
         setGameState(nextState);
-        if (gameState.gameMode === 'PASS_AND_PLAY') setShowPassCover(true);
       } else {
         setGameState({ ...gameState, status: 'GAME_OVER' });
       }
@@ -473,16 +419,11 @@ export default function App() {
     localStorage.removeItem(SESSION_STORAGE_KEY);
     setGameState(null);
     setMyPlayerId(null);
-    setShowPassCover(false);
     setActionError(null);
   };
 
-  const activePlayerId =
-    gameState?.gameMode === 'PASS_AND_PLAY'
-      ? gameState.passAndPlayCurrentPlayerId
-      : myPlayerId;
   const currentHumanPlayer =
-    gameState?.players.find((p) => p.id === activePlayerId) || gameState?.players[0];
+    gameState?.players.find((p) => p.id === myPlayerId) || gameState?.players[0];
 
   return (
     <MotionConfig reducedMotion="user">
@@ -492,7 +433,6 @@ export default function App() {
         roomCode={gameState?.roomCode}
         currentRound={gameState?.currentRound}
         maxRounds={gameState?.maxRounds}
-        gameMode={gameState?.gameMode}
         onOpenRules={() => setIsRulesOpen(true)}
         onReturnLobby={handleReturnLobby}
       />
@@ -514,7 +454,6 @@ export default function App() {
             onSetGameMode={(mode) => setGameMode(mode)}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
-            onAddLocalPlayer={handleAddLocalPlayer}
             onAddBot={handleAddBot}
             onRemoveBot={handleRemoveBot}
             onStartGame={handleStartGame}
@@ -539,14 +478,6 @@ export default function App() {
           />
         )}
       </main>
-
-      {/* Pass and Play Screen Cover */}
-      {showPassCover && currentHumanPlayer && (
-        <PassAndPlayCover
-          currentPlayer={currentHumanPlayer}
-          onReveal={() => setShowPassCover(false)}
-        />
-      )}
 
       {/* Game Rules Modal */}
       <GameRulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />

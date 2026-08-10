@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { ArrowLeftRight, Eye, ShieldCheck, Sparkles } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Eye, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { GameState, Player, NinjaCard } from '../types/game';
 import { NinjaCardView, HouseCardView } from './NinjaCardView';
 import { sounds } from '../utils/audio';
@@ -18,21 +18,64 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
 }) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [showHouseSecret, setShowHouseSecret] = useState(false);
+  const [discardingCardId, setDiscardingCardId] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const confirmTimerRef = useRef<number | null>(null);
 
   const passDirectionVi = gameState.currentRound % 2 !== 0 ? 'TRÁI ⬅️' : 'PHẢI ➡️';
   const pickedCount = currentPlayer.selectedCards.length;
-  const needPickCount = 3 - pickedCount;
+  const draftPickNumber = gameState.draftPickNumber || 1;
+  const needPickCount = Math.max(0, 2 - pickedCount);
+  const hasCompletedDraft = pickedCount >= 2;
+  const hasPickedCurrentStage = pickedCount >= draftPickNumber;
+  const isReceivedHand =
+    draftPickNumber === 2 &&
+    !hasPickedCurrentStage &&
+    currentPlayer.draftHand.length === 2;
+  const handKey = currentPlayer.draftHand.map((card) => card.id).join('-') || 'empty';
+  const receiveOffset = gameState.currentRound % 2 !== 0 ? 96 : -96;
+
+  useEffect(() => {
+    setSelectedCardId(null);
+    setDiscardingCardId(null);
+    setIsConfirming(false);
+  }, [currentPlayer.id, handKey]);
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current !== null) {
+        window.clearTimeout(confirmTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSelectCard = (card: NinjaCard) => {
+    if (isConfirming || hasCompletedDraft) return;
     sounds.playCardFlip();
     setSelectedCardId(card.id);
   };
 
   const handleConfirmPick = () => {
-    if (selectedCardId) {
-      onPickCard(selectedCardId);
-      setSelectedCardId(null);
+    if (!selectedCardId || isConfirming) return;
+
+    if (isReceivedHand) {
+      const cardToDiscard = currentPlayer.draftHand.find(
+        (card) => card.id !== selectedCardId
+      );
+      setDiscardingCardId(cardToDiscard?.id || null);
+      setIsConfirming(true);
+      sounds.playCardFlip();
+      confirmTimerRef.current = window.setTimeout(() => {
+        onPickCard(selectedCardId);
+        setSelectedCardId(null);
+        setDiscardingCardId(null);
+        setIsConfirming(false);
+      }, 420);
+      return;
     }
+
+    onPickCard(selectedCardId);
+    setSelectedCardId(null);
   };
 
   return (
@@ -45,10 +88,17 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
             <span>GIAI ĐOẠN TUYỂN CHỌN (DRAFT) • HIỆP {gameState.currentRound}</span>
           </div>
           <h2 className="phase-title mt-2">
-            Chọn 1 Lá Ninja & Chuyển Bài Qua Bên {passDirectionVi}
+            {hasCompletedDraft
+              ? 'Bạn Đã Hoàn Tất Tuyển Chọn'
+              : hasPickedCurrentStage
+              ? 'Đang Chờ Những Ninja Khác Chọn Lá'
+              : draftPickNumber === 1
+              ? `Chọn 1 Lá & Chuyển 2 Lá Sang Bên ${passDirectionVi}`
+              : 'Nhận 2 Lá • Chọn 1 Lá, Bỏ 1 Lá'}
           </h2>
           <p className="text-xs text-secondary mt-1">
-            Bạn đã chọn <strong>{pickedCount}/3</strong> lá bài Ninja. Còn cần chọn thêm {needPickCount} lá.
+            Bạn đã giữ <strong>{pickedCount}/2</strong> lá bài Ninja.
+            {needPickCount > 0 ? ` Còn cần chọn thêm ${needPickCount} lá.` : ' Đang chờ bàn chơi hoàn tất.'}
           </p>
         </div>
 
@@ -86,27 +136,72 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
       {/* Available Draft Hand Cards */}
       <div className="game-card game-card-section space-y-4">
         <h3 className="section-title flex-col sm:flex-row sm:justify-between sm:items-center">
-          <span>Xấp Bài Ninja Trôi Tới Tay Bạn (Chọn 1 Lá):</span>
-          <span className="text-xs text-secondary font-normal">
-            Hướng chuyển bài sau khi chọn: <strong>{passDirectionVi}</strong>
+          <span>
+            {isReceivedHand
+              ? 'Hai Lá Người Chơi Khác Vừa Chuyển Tới'
+              : hasCompletedDraft
+              ? 'Tuyển Chọn Hoàn Tất'
+              : hasPickedCurrentStage
+              ? 'Đang Chờ Chuyển Bài'
+              : 'Ba Lá Bài Ban Đầu Của Bạn'}
+          </span>
+          <span className="badge font-normal">
+            <Trash2 className="w-4 h-4" />
+            Chồng bài bỏ: {gameState.ninjaDiscardPile?.length || 0}
           </span>
         </h3>
 
-        {currentPlayer.draftHand.length === 0 ? (
+        {hasCompletedDraft || hasPickedCurrentStage ? (
+          <div className="status-panel text-center py-8">
+            {hasCompletedDraft
+              ? '✓ Bạn đã chọn đủ 2 lá. Đang chờ những Ninja khác hoàn tất…'
+              : '✓ Đã giữ lá đầu tiên. Đang chờ mọi người chọn xong để nhận 2 lá được chuyển tới…'}
+          </div>
+        ) : currentPlayer.draftHand.length === 0 ? (
           <div className="text-center py-12 text-secondary text-sm">
-            ⏳ Đang chờ những Ninja khác hoàn tất chọn bài...
+            ⏳ Đang chờ nhận 2 lá bài từ người chơi bên cạnh…
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4 justify-items-center">
-            {currentPlayer.draftHand.map((card) => (
-              <NinjaCardView
-                key={card.id}
-                card={card}
-                isSelected={selectedCardId === card.id}
-                onClick={() => handleSelectCard(card)}
-                size="md"
-              />
-            ))}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={handKey}
+              initial={
+                isReceivedHand
+                  ? { opacity: 0, x: receiveOffset, scale: 0.94 }
+                  : { opacity: 0, y: 20, scale: 0.96 }
+              }
+              animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              transition={{ duration: 0.32, ease: 'easeOut' }}
+              className={`grid gap-3 justify-items-center ${
+                currentPlayer.draftHand.length === 2
+                  ? 'grid-cols-2 max-w-sm mx-auto'
+                  : 'grid-cols-2 sm:grid-cols-3'
+              }`}
+            >
+              {currentPlayer.draftHand.map((card) => (
+                <NinjaCardView
+                  key={card.id}
+                  card={card}
+                  isSelected={selectedCardId === card.id}
+                  onClick={() => handleSelectCard(card)}
+                  className={
+                    discardingCardId === card.id
+                      ? 'is-discarding'
+                      : isConfirming && selectedCardId === card.id
+                      ? 'is-keeping'
+                      : ''
+                  }
+                  size="md"
+                />
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        )}
+
+        {isReceivedHand && !hasCompletedDraft && (
+          <div className="status-panel text-sm">
+            Chọn đúng 1 trong 2 lá. Lá không chọn sẽ được đưa vào chồng bài bỏ và không quay lại ván này.
           </div>
         )}
 
@@ -115,9 +210,14 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
           <div className="bottom-action-bar text-center">
             <button
               onClick={handleConfirmPick}
+              disabled={isConfirming}
               className="btn btn-primary btn-cta sm:w-auto"
             >
-              ✓ Xác Nhận Chọn Lá Bài Này!
+              {isConfirming
+                ? 'Đang Đưa Lá Còn Lại Vào Chồng Bài Bỏ…'
+                : isReceivedHand
+                ? 'Giữ Lá Này & Bỏ Lá Còn Lại'
+                : 'Giữ Lá Này & Chuyển 2 Lá Còn Lại'}
             </button>
           </div>
         )}
@@ -128,7 +228,7 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
         <div className="game-card game-card-section">
           <h4 className="section-title text-sm mb-3">
             <ShieldCheck className="w-5 h-5" />
-            <span>Các Lá Bài Bạn Đã Tuyển Chọn ({currentPlayer.selectedCards.length}/3):</span>
+            <span>Các Lá Bài Bạn Đã Giữ ({currentPlayer.selectedCards.length}/2):</span>
           </h4>
 
           <div className="flex flex-wrap gap-3 justify-center">

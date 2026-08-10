@@ -1,12 +1,11 @@
 import React from 'react';
-import { Volume2, VolumeX, HelpCircle, Users, Trophy, Flame } from 'lucide-react';
+import { Volume2, VolumeX, HelpCircle, Users, Flame } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 interface HeaderProps {
   roomCode?: string;
   currentRound?: number;
   maxRounds?: number;
-  gameMode?: string;
   onOpenRules: () => void;
   onReturnLobby?: () => void;
 }
@@ -15,7 +14,6 @@ export const Header: React.FC<HeaderProps> = ({
   roomCode,
   currentRound,
   maxRounds = 3,
-  gameMode,
   onOpenRules,
   onReturnLobby,
 }) => {

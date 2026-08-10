@@ -60,6 +60,9 @@ app.get('/api/health', (req, res) => {
 // Create Room
 app.post('/api/rooms/create', (req, res) => {
   const { hostName, mode } = req.body as { hostName: string; mode: GameMode };
+  if (mode !== 'SOLO_BOTS' && mode !== 'ONLINE_ROOM') {
+    return res.status(400).json({ error: 'Chế độ chơi không hợp lệ.' });
+  }
   const roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
 
   const hostPlayer: Player = {

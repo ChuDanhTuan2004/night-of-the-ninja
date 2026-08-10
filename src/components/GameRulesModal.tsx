@@ -50,11 +50,21 @@ export const GameRulesModal: React.FC<GameRulesModalProps> = ({ isOpen, onClose 
             </p>
           </div>
 
+          <div className="status-panel">
+            <h3 className="section-title mb-2">
+              <span>🃏</span>
+              <span>2. Tuyển Chọn Bài</span>
+            </h3>
+            <p>
+              Mỗi Ninja nhận 3 lá và bí mật giữ 1 lá, sau đó chuyển 2 lá còn lại theo hướng của hiệp. Khi nhận 2 lá từ người bên cạnh, giữ đúng 1 lá; lá còn lại được đưa vào chồng bài bỏ. Mỗi người kết thúc Draft với 2 lá.
+            </p>
+          </div>
+
           {/* Section 2: Houses */}
           <div>
             <h3 className="section-title mb-3">
               <Users className="w-5 h-5" />
-              <span>2. Ba Phe Gia Tộc</span>
+              <span>3. Ba Phe Gia Tộc</span>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="game-card p-3">
@@ -93,7 +103,7 @@ export const GameRulesModal: React.FC<GameRulesModalProps> = ({ isOpen, onClose 
           <div className="space-y-3">
             <h3 className="section-title">
               <Sword className="w-5 h-5" />
-              <span>3. Bốn Giai Đoạn Tốc Độ (Thứ Tự Xuất Chiêu)</span>
+              <span>4. Bốn Giai Đoạn Tốc Độ (Thứ Tự Xuất Chiêu)</span>
             </h3>
 
             <div className="space-y-2 text-xs">
@@ -118,7 +128,7 @@ export const GameRulesModal: React.FC<GameRulesModalProps> = ({ isOpen, onClose 
           {/* Section 4: Scoring */}
           <div className="game-card game-card-section">
             <h3 className="section-title mb-1">
-              4. Tính Điểm & Trao Thẻ Danh Dự
+              5. Tính Điểm & Trao Thẻ Danh Dự
             </h3>
             <ul className="list-disc list-inside text-xs text-secondary space-y-1">
               <li>Mỗi người sống sót thuộc Gia Tộc thắng hiệp được rút 1 Thẻ Danh Dự.</li>

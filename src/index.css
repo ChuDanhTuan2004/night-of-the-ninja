@@ -453,6 +453,15 @@ button { touch-action: manipulation; }
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(15, 106, 161, 0.3), var(--shadow-glow);
 }
+.ninja-card.is-discarding {
+  pointer-events: none;
+  animation: discard-card 420ms ease-in forwards;
+}
+.ninja-card.is-keeping {
+  pointer-events: none;
+  border-color: var(--color-primary);
+  animation: keep-card 420ms ease-out;
+}
 .ninja-card:disabled { cursor: default; opacity: 0.48; }
 .ninja-card-sm { width: 112px; height: 160px; padding: var(--space-2); }
 .ninja-card-lg { max-width: 208px; height: 320px; padding: var(--space-4); }
@@ -485,6 +494,17 @@ button { touch-action: manipulation; }
   text-align: center;
 }
 .house-card-sm { width: 96px; height: 144px; padding: var(--space-2); }
+
+@keyframes discard-card {
+  0% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+  45% { opacity: 0.72; transform: translateY(24px) rotate(5deg) scale(0.92); }
+  100% { opacity: 0; transform: translateY(160px) rotate(12deg) scale(0.72); }
+}
+
+@keyframes keep-card {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(15, 106, 161, 0.3); }
+  50% { transform: scale(1.04); box-shadow: var(--shadow-glow); }
+}
 
 @media (min-width: 768px) {
   body { font-size: var(--font-md); }

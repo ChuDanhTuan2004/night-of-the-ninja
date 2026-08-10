@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Bot, Play, ShieldAlert, Plus, Trash2, Copy, Check, Sparkles } from 'lucide-react';
+import { Users, Bot, Play, Plus, Trash2, Copy, Check, Sparkles } from 'lucide-react';
 import { GameMode, Player } from '../types/game';
 import { AVATARS } from '../data/cards';
 
@@ -12,7 +12,6 @@ interface LobbyViewProps {
   onSetGameMode: (mode: GameMode) => void;
   onCreateRoom: (hostName: string, mode: GameMode) => void;
   onJoinRoom: (roomCode: string, name: string) => void;
-  onAddLocalPlayer: (name: string) => void;
   onAddBot: () => void;
   onRemoveBot: (botId: string) => void;
   onStartGame: () => void;
@@ -27,7 +26,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   onSetGameMode,
   onCreateRoom,
   onJoinRoom,
-  onAddLocalPlayer,
   onAddBot,
   onRemoveBot,
   onStartGame,
@@ -35,7 +33,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [hostName, setHostName] = useState('Ninja Master');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinNameInput, setJoinNameInput] = useState('Shinobi');
-  const [localPlayerName, setLocalPlayerName] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
   const [tab, setTab] = useState<'CREATE' | 'JOIN'>('CREATE');
 
@@ -117,18 +114,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => onSetGameMode('PASS_AND_PLAY')}
-                    className={`mode-option ${gameMode === 'PASS_AND_PLAY' ? 'is-selected' : ''}`}
-                  >
-                    <ShieldAlert className="w-5 h-5 mt-1 shrink-0" />
-                    <div>
-                      <div className="font-semibold text-sm text-white">Pass & Play (Cùng 1 Màn Hình)</div>
-                      <div className="text-xs text-secondary">Chơi trực tiếp trên 1 thiết bị, có màn hình che thẻ bảo mật!</div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => onSetGameMode('ONLINE_ROOM')}
                     className={`mode-option ${gameMode === 'ONLINE_ROOM' ? 'is-selected' : ''}`}
                   >
@@ -201,7 +186,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
       <div className="game-card game-card-section flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="eyebrow">
-            PHÒNG CHỜ NINJA • {gameMode === 'SOLO_BOTS' ? 'ĐẤU BOT AI' : gameMode === 'PASS_AND_PLAY' ? 'PASS & PLAY' : 'TRỰC TUYẾN'}
+            PHÒNG CHỜ NINJA • {gameMode === 'SOLO_BOTS' ? 'ĐẤU BOT AI' : 'TRỰC TUYẾN'}
           </div>
           <h2 className="phase-title mt-1">
             Mã Phòng: <span className="font-mono">{roomCode}</span>
@@ -220,7 +205,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             <span>{copiedCode ? 'Đã Sa Chép!' : 'Sao Chép Mã'}</span>
           </button>
 
-          {isHost && gameMode !== 'PASS_AND_PLAY' && (
+          {isHost && (
             <button
               onClick={onAddBot}
               disabled={players.length >= 11}
@@ -239,37 +224,6 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <Users className="w-5 h-5" />
           <span>Danh Sách Ninja Tham Gia ({players.length}/11)</span>
         </h3>
-
-        {isHost && gameMode === 'PASS_AND_PLAY' && (
-          <form
-            className="mb-4 flex flex-col sm:flex-row gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!localPlayerName.trim()) return;
-              onAddLocalPlayer(localPlayerName);
-              setLocalPlayerName('');
-            }}
-          >
-            <label htmlFor="local-player-name" className="sr-only">
-              Tên người chơi tiếp theo
-            </label>
-            <input
-              id="local-player-name"
-              value={localPlayerName}
-              onChange={(event) => setLocalPlayerName(event.target.value)}
-              maxLength={24}
-              placeholder="Tên người chơi tiếp theo…"
-              className="form-control flex-1"
-            />
-            <button
-              type="submit"
-              disabled={!localPlayerName.trim() || players.length >= 11}
-              className="btn btn-primary"
-            >
-              Thêm Người Chơi
-            </button>
-          </form>
-        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {players.map((p, idx) => (
@@ -292,7 +246,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
               </div>
 
-              {isHost && (p.isBot || (gameMode === 'PASS_AND_PLAY' && !p.isHost)) && (
+              {isHost && p.isBot && (
                 <button
                   onClick={() => onRemoveBot(p.id)}
                   className="btn btn-ghost btn-icon"

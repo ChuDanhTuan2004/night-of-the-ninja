@@ -69,10 +69,9 @@ export function initializeNewGame(players: Player[], mode: GameMode): GameState 
     gameMode: mode,
     currentRound: 1,
     maxRounds: 3,
+    draftPickNumber: 1,
     executionRank: 1,
     executionStep: 0,
-    passAndPlayCurrentPlayerId: players[0]?.id || null,
-    passAndPlayRevealed: false,
     players: players.map((p) => ({
       ...p,
       isAlive: true,
@@ -89,6 +88,7 @@ export function initializeNewGame(players: Player[], mode: GameMode): GameState 
     })),
     honorDeck,
     ninjaDeck,
+    ninjaDiscardPile: [],
     roundWinnerClan: null,
     roundSummaryLogs: [],
     privateNotices: {},
@@ -103,32 +103,6 @@ export function initializeNewGame(players: Player[], mode: GameMode): GameState 
   };
 
   return state;
-}
-
-function getNextPassAndPlayPlayerId(
-  state: GameState,
-  afterPlayerId: string
-): string | null {
-  const humanPlayers = state.players.filter((player) => !player.isBot);
-  if (humanPlayers.length === 0) return null;
-
-  const minimumPicked = Math.min(
-    ...humanPlayers.map((player) => player.selectedCards.length)
-  );
-  const startIndex = humanPlayers.findIndex((player) => player.id === afterPlayerId);
-
-  for (let offset = 1; offset <= humanPlayers.length; offset++) {
-    const index = (Math.max(startIndex, 0) + offset) % humanPlayers.length;
-    const candidate = humanPlayers[index];
-    if (
-      candidate.draftHand.length > 0 &&
-      candidate.selectedCards.length === minimumPicked
-    ) {
-      return candidate.id;
-    }
-  }
-
-  return humanPlayers[0]?.id || null;
 }
 
 export function startRound(state: GameState, roundNum: number): GameState {
@@ -172,16 +146,16 @@ export function startRound(state: GameState, roundNum: number): GameState {
     ...state,
     status: 'DRAFTING',
     currentRound: roundNum,
+    draftPickNumber: 1,
     executionRank: 1,
     executionStep: 0,
     players: updatedPlayers,
     ninjaDeck: remainingNinjaDeck,
+    ninjaDiscardPile: [],
     roundWinnerClan: null,
     roundSummaryLogs: [],
     privateNotices: {},
     actionLogs: [newLog, ...state.actionLogs],
-    passAndPlayCurrentPlayerId: updatedPlayers[0].id,
-    passAndPlayRevealed: false,
   };
 
   // Auto pick for bots in initial drafting if any
@@ -193,6 +167,24 @@ export function handleDraftPick(
   playerId: string,
   cardId: string
 ): GameState {
+  const draftPickNumber = state.draftPickNumber || 1;
+  const actingPlayer = state.players.find((player) => player.id === playerId);
+  if (
+    !actingPlayer ||
+    actingPlayer.selectedCards.length >= 2 ||
+    actingPlayer.selectedCards.length !== draftPickNumber - 1
+  ) {
+    return state;
+  }
+
+  const selectedCard = actingPlayer.draftHand.find((card) => card.id === cardId);
+  if (!selectedCard) return state;
+
+  const isSecondPick = actingPlayer.selectedCards.length === 1;
+  const discardedCards = isSecondPick
+    ? actingPlayer.draftHand.filter((card) => card.id !== cardId)
+    : [];
+
   let updatedPlayers = state.players.map((p) => {
     if (p.id !== playerId) return p;
 
@@ -202,17 +194,20 @@ export function handleDraftPick(
     return {
       ...p,
       selectedCards: [...p.selectedCards, card],
-      draftHand: p.draftHand.filter((c) => c.id !== cardId),
+      draftHand: isSecondPick
+        ? []
+        : p.draftHand.filter((c) => c.id !== cardId),
     };
   });
 
   // Check if ALL players have picked 1 card in this draft turn
   const draftTurnPicks = updatedPlayers[0].selectedCards.length;
   const allPicked = updatedPlayers.every((p) => p.selectedCards.length === draftTurnPicks);
+  let nextDraftPickNumber = draftPickNumber;
 
   if (allPicked) {
-    if (draftTurnPicks < 3) {
-      // Pass remaining hands to next player (Rotate draft hands)
+    if (draftTurnPicks < 2) {
+      // After the first pick, pass the two remaining cards to the next player.
       const hands = updatedPlayers.map((p) => p.draftHand);
       updatedPlayers = updatedPlayers.map((p, idx) => {
         // Round 1 & 3 pass left (idx + 1), Round 2 pass right (idx - 1)
@@ -226,6 +221,7 @@ export function handleDraftPick(
           draftHand: hands[sourceIdx],
         };
       });
+      nextDraftPickNumber = 2;
     } else {
       // Drafting Complete! Move to Execution Phase!
       const logMsg: ActionLogEntry = {
@@ -241,6 +237,10 @@ export function handleDraftPick(
         executionRank: 1,
         executionStep: 0,
         players: updatedPlayers,
+        ninjaDiscardPile: [
+          ...(state.ninjaDiscardPile || []),
+          ...discardedCards,
+        ],
         actionLogs: [logMsg, ...state.actionLogs],
       };
 
@@ -251,23 +251,14 @@ export function handleDraftPick(
   const newState: GameState = {
     ...state,
     players: updatedPlayers,
+    draftPickNumber: nextDraftPickNumber as 1 | 2,
+    ninjaDiscardPile: [
+      ...(state.ninjaDiscardPile || []),
+      ...discardedCards,
+    ],
   };
 
   const processedState = processBotDraftingIfNeeded(newState);
-
-  if (
-    processedState.gameMode === 'PASS_AND_PLAY' &&
-    processedState.status === 'DRAFTING'
-  ) {
-    return {
-      ...processedState,
-      passAndPlayCurrentPlayerId: getNextPassAndPlayPlayerId(
-        processedState,
-        playerId
-      ),
-      passAndPlayRevealed: false,
-    };
-  }
 
   return processedState;
 }
@@ -382,15 +373,6 @@ export function processNextExecutionStep(state: GameState): GameState {
   }
 
   // If human, wait for user input or auto-prompt in UI.
-  // Pass & Play must explicitly hand the device to the correct actor.
-  if (state.gameMode === 'PASS_AND_PLAY') {
-    return {
-      ...state,
-      passAndPlayCurrentPlayerId: actor.id,
-      passAndPlayRevealed: false,
-    };
-  }
-
   return state;
 }
 
