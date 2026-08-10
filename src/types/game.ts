@@ -119,6 +119,9 @@ export interface GameState {
   roundWinnerClan: HouseType | 'DRAW' | null;
   roundSummaryLogs: string[];
   actionLogs: ActionLogEntry[];
+
+  // Information visible only to the player who triggered a secret effect.
+  privateNotices?: Record<string, string[]>;
   
   // Bot belief state for Bot AI (stored on server/local engine)
   botBeliefs?: Record<string, Record<string, { LOTUS: number; CRANE: number; RONIN: number }>>;

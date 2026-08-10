@@ -120,6 +120,16 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Player Table Grid */}
         <div className="lg:col-span-2 space-y-4">
+          {gameState.privateNotices?.[currentPlayer.id]?.[0] && (
+            <div role="status" className="rounded-2xl border border-indigo-400/50 bg-indigo-950/70 p-4 shadow-xl">
+              <div className="text-[11px] font-mono font-bold uppercase tracking-widest text-indigo-300 mb-1">
+                Thông Tin Bí Mật • Chỉ Bạn Biết
+              </div>
+              <p className="text-sm text-indigo-100">
+                {gameState.privateNotices[currentPlayer.id][0]}
+              </p>
+            </div>
+          )}
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
             <h3 className="text-sm font-bold font-mono text-amber-300 uppercase tracking-wider mb-4 flex items-center space-x-2">
               <Crosshair className="w-4 h-4 text-rose-400" />

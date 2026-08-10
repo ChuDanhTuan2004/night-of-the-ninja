@@ -15,35 +15,86 @@ import {
 } from './utils/gameEngine';
 import { AVATARS, BOT_NAMES } from './data/cards';
 
+const SESSION_STORAGE_KEY = 'night-of-the-ninja-session-v1';
+
+interface PersistedSession {
+  gameState: GameState | null;
+  myPlayerId: string | null;
+  gameMode: GameMode;
+}
+
+function loadPersistedSession(): PersistedSession | null {
+  try {
+    const rawSession = localStorage.getItem(SESSION_STORAGE_KEY);
+    return rawSession ? (JSON.parse(rawSession) as PersistedSession) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
-  const [gameMode, setGameMode] = useState<GameMode>('SOLO_BOTS');
+  const [initialSession] = useState(loadPersistedSession);
+  const [gameState, setGameState] = useState<GameState | null>(
+    initialSession?.gameState ?? null
+  );
+  const [myPlayerId, setMyPlayerId] = useState<string | null>(
+    initialSession?.myPlayerId ?? null
+  );
+  const [gameMode, setGameMode] = useState<GameMode>(
+    initialSession?.gameMode ?? 'SOLO_BOTS'
+  );
   const [isRulesOpen, setIsRulesOpen] = useState(false);
-  const [showPassCover, setShowPassCover] = useState(false);
+  const [showPassCover, setShowPassCover] = useState(
+    initialSession?.gameState?.gameMode === 'PASS_AND_PLAY' &&
+      initialSession.gameState.status !== 'LOBBY' &&
+      initialSession.gameState.status !== 'ROUND_SUMMARY' &&
+      initialSession.gameState.status !== 'GAME_OVER'
+  );
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ gameState, myPlayerId, gameMode })
+      );
+    } catch {
+      // The game remains usable when storage is unavailable.
+    }
+  }, [gameState, myPlayerId, gameMode]);
 
   // SSE Real-time sync for ONLINE_ROOM
   useEffect(() => {
     if (!gameState || gameState.gameMode !== 'ONLINE_ROOM' || !gameState.roomCode) return;
 
-    const eventSource = new EventSource(`/api/rooms/${gameState.roomCode}/stream`);
+    const eventSource = new EventSource(
+      `/api/rooms/${gameState.roomCode}/stream?playerId=${encodeURIComponent(myPlayerId || '')}`
+    );
 
     eventSource.onmessage = (event) => {
       try {
         const updatedRoom: GameState = JSON.parse(event.data);
         setGameState(updatedRoom);
+        setActionError(null);
       } catch (err) {
         console.error('SSE JSON error:', err);
       }
     };
 
+    eventSource.onerror = () => {
+      setActionError('Mất kết nối với phòng. Trò chơi đang tự thử kết nối lại…');
+    };
+
     return () => {
       eventSource.close();
     };
-  }, [gameState?.roomCode, gameState?.gameMode]);
+  }, [gameState?.roomCode, gameState?.gameMode, myPlayerId]);
 
   // Handle Room Creation
   const handleCreateRoom = async (hostName: string, mode: GameMode) => {
+    setPendingAction('CREATE');
+    setActionError(null);
     try {
       const res = await fetch('/api/rooms/create', {
         method: 'POST',
@@ -51,12 +102,21 @@ export default function App() {
         body: JSON.stringify({ hostName, mode }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Không thể tạo phòng.');
       if (data.state) {
         setGameState(data.state);
         setMyPlayerId(data.state.players[0].id);
+        setGameMode(mode);
       }
     } catch (err) {
-      // Fallback local engine if API error
+      if (mode === 'ONLINE_ROOM') {
+        setActionError(
+          err instanceof Error ? err.message : 'Không thể tạo phòng trực tuyến.'
+        );
+        return;
+      }
+
+      // Local modes can continue without the room server.
       const host: Player = {
         id: `host-${Date.now()}`,
         name: hostName || 'Trưởng Môn',
@@ -102,14 +162,20 @@ export default function App() {
         }
       }
 
-      const room = initializeNewGame(initialPlayers, mode);
+      let room = initializeNewGame(initialPlayers, mode);
+      if (mode === 'SOLO_BOTS') room = startRound(room, 1);
       setGameState(room);
       setMyPlayerId(host.id);
+      setGameMode(mode);
+    } finally {
+      setPendingAction(null);
     }
   };
 
   // Handle Join Room
   const handleJoinRoom = async (roomCode: string, name: string) => {
+    setPendingAction('JOIN');
+    setActionError(null);
     try {
       const res = await fetch('/api/rooms/join', {
         method: 'POST',
@@ -117,15 +183,47 @@ export default function App() {
         body: JSON.stringify({ roomCode, playerName: name }),
       });
       const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-        return;
-      }
+      if (!res.ok) throw new Error(data.error || 'Không thể tham gia phòng.');
       setGameState(data.state);
       setMyPlayerId(data.playerId);
+      setGameMode(data.state.gameMode);
     } catch (err) {
-      alert('Không thể tham gia phòng! Vui lòng kiểm tra lại mã phòng.');
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : 'Không thể tham gia phòng. Vui lòng kiểm tra lại mã phòng.'
+      );
+    } finally {
+      setPendingAction(null);
     }
+  };
+
+  const handleAddLocalPlayer = (playerName: string) => {
+    if (!gameState || gameState.gameMode !== 'PASS_AND_PLAY') return;
+    const trimmedName = playerName.trim();
+    if (!trimmedName || gameState.players.length >= 11) return;
+
+    const newPlayer: Player = {
+      id: `player-local-${Date.now()}`,
+      name: trimmedName,
+      avatar: AVATARS[gameState.players.length % AVATARS.length],
+      isBot: false,
+      isHost: false,
+      isReady: true,
+      house: null,
+      revealedHouse: false,
+      isAlive: true,
+      draftHand: [],
+      selectedCards: [],
+      playedCardsThisPhase: [],
+      isProtected: false,
+      retaliateOnDeath: false,
+      honorTokens: [],
+      totalScore: 0,
+      killsThisRound: 0,
+    };
+
+    setGameState({ ...gameState, players: [...gameState.players, newPlayer] });
   };
 
   // Handle Add AI Bot
@@ -136,7 +234,7 @@ export default function App() {
         const res = await fetch('/api/rooms/add-bot', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomCode: gameState.roomCode }),
+          body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
         });
         const data = await res.json();
         if (data.state) setGameState(data.state);
@@ -180,7 +278,7 @@ export default function App() {
         const res = await fetch('/api/rooms/remove-bot', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomCode: gameState.roomCode, botId }),
+          body: JSON.stringify({ roomCode: gameState.roomCode, botId, playerId: myPlayerId }),
         });
         const data = await res.json();
         if (data.state) setGameState(data.state);
@@ -198,27 +296,43 @@ export default function App() {
   // Handle Start Match
   const handleStartGame = async () => {
     if (!gameState) return;
+    setPendingAction('START');
+    setActionError(null);
     if (gameState.gameMode === 'ONLINE_ROOM') {
       try {
         const res = await fetch('/api/rooms/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomCode: gameState.roomCode }),
+          body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
         });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Không thể bắt đầu trận đấu.');
         if (data.state) setGameState(data.state);
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        setActionError(
+          err instanceof Error ? err.message : 'Không thể bắt đầu trận đấu.'
+        );
+      } finally {
+        setPendingAction(null);
       }
     } else {
       const started = startRound(gameState, 1);
       setGameState(started);
+      if (gameState.gameMode === 'PASS_AND_PLAY') setShowPassCover(true);
+      setPendingAction(null);
     }
   };
 
   // Handle Draft Pick Action
   const handlePickCard = async (cardId: string) => {
-    if (!gameState || !myPlayerId) return;
+    if (!gameState || !myPlayerId || pendingAction) return;
+
+    const actorId =
+      gameState.gameMode === 'PASS_AND_PLAY'
+        ? gameState.passAndPlayCurrentPlayerId
+        : myPlayerId;
+    if (!actorId) return;
+    setPendingAction('PICK');
 
     if (gameState.gameMode === 'ONLINE_ROOM') {
       try {
@@ -228,23 +342,27 @@ export default function App() {
           body: JSON.stringify({
             roomCode: gameState.roomCode,
             actionType: 'DRAFT',
-            playerId: myPlayerId,
+            playerId: actorId,
             cardId,
           }),
         });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Không thể chọn lá bài.');
         if (data.state) setGameState(data.state);
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Không thể chọn lá bài.');
+      } finally {
+        setPendingAction(null);
       }
     } else {
-      const nextState = handleDraftPick(gameState, myPlayerId, cardId);
+      const nextState = handleDraftPick(gameState, actorId, cardId);
       setGameState(nextState);
 
       // Handle Pass & Play screen cover if active
       if (gameState.gameMode === 'PASS_AND_PLAY') {
         setShowPassCover(true);
       }
+      setPendingAction(null);
     }
   };
 
@@ -254,7 +372,14 @@ export default function App() {
     targetId?: string,
     secondTargetId?: string
   ) => {
-    if (!gameState || !myPlayerId) return;
+    if (!gameState || !myPlayerId || pendingAction) return;
+
+    const actorId =
+      gameState.gameMode === 'PASS_AND_PLAY'
+        ? gameState.passAndPlayCurrentPlayerId
+        : myPlayerId;
+    if (!actorId) return;
+    setPendingAction('EXECUTE');
 
     if (gameState.gameMode === 'ONLINE_ROOM') {
       try {
@@ -264,26 +389,39 @@ export default function App() {
           body: JSON.stringify({
             roomCode: gameState.roomCode,
             actionType: 'EXECUTE_CARD',
-            playerId: myPlayerId,
+            playerId: actorId,
             cardId,
             targetId,
             secondTargetId,
           }),
         });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Không thể thực hiện kỹ năng.');
         if (data.state) setGameState(data.state);
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        setActionError(
+          err instanceof Error ? err.message : 'Không thể thực hiện kỹ năng.'
+        );
+      } finally {
+        setPendingAction(null);
       }
     } else {
       const nextState = executeCardAction(
         gameState,
-        myPlayerId,
+        actorId,
         cardId,
         targetId,
         secondTargetId
       );
       setGameState(nextState);
+      if (
+        gameState.gameMode === 'PASS_AND_PLAY' &&
+        nextState.status === 'EXECUTION' &&
+        nextState.passAndPlayCurrentPlayerId !== actorId
+      ) {
+        setShowPassCover(true);
+      }
+      setPendingAction(null);
     }
   };
 
@@ -311,14 +449,39 @@ export default function App() {
       if (gameState.currentRound < gameState.maxRounds) {
         const nextState = startRound(gameState, gameState.currentRound + 1);
         setGameState(nextState);
+        if (gameState.gameMode === 'PASS_AND_PLAY') setShowPassCover(true);
       } else {
         setGameState({ ...gameState, status: 'GAME_OVER' });
       }
     }
   };
 
+  const handleReturnLobby = () => {
+    const isActiveMatch =
+      gameState &&
+      gameState.status !== 'LOBBY' &&
+      gameState.status !== 'GAME_OVER';
+
+    if (
+      isActiveMatch &&
+      !window.confirm('Rời trận hiện tại? Tiến trình chưa hoàn tất sẽ bị mất.')
+    ) {
+      return;
+    }
+
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setGameState(null);
+    setMyPlayerId(null);
+    setShowPassCover(false);
+    setActionError(null);
+  };
+
+  const activePlayerId =
+    gameState?.gameMode === 'PASS_AND_PLAY'
+      ? gameState.passAndPlayCurrentPlayerId
+      : myPlayerId;
   const currentHumanPlayer =
-    gameState?.players.find((p) => p.id === myPlayerId) || gameState?.players[0];
+    gameState?.players.find((p) => p.id === activePlayerId) || gameState?.players[0];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col justify-between">
@@ -329,20 +492,27 @@ export default function App() {
         maxRounds={gameState?.maxRounds}
         gameMode={gameState?.gameMode}
         onOpenRules={() => setIsRulesOpen(true)}
-        onReturnLobby={() => setGameState(null)}
+        onReturnLobby={handleReturnLobby}
       />
 
       {/* Main Game Screen View Routing */}
       <main className="flex-1 container mx-auto px-2 py-4">
+        {actionError ? (
+          <div role="alert" className="max-w-4xl mx-auto mb-3 px-4 py-3 rounded-xl border border-rose-500/40 bg-rose-950/70 text-rose-200 text-sm">
+            {actionError}
+          </div>
+        ) : null}
         {!gameState || gameState.status === 'LOBBY' ? (
           <LobbyView
             roomCode={gameState?.roomCode}
-            gameMode={gameMode}
+            gameMode={gameState?.gameMode ?? gameMode}
             players={gameState?.players || []}
             isHost={currentHumanPlayer?.isHost ?? true}
+            isBusy={pendingAction !== null}
             onSetGameMode={(mode) => setGameMode(mode)}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
+            onAddLocalPlayer={handleAddLocalPlayer}
             onAddBot={handleAddBot}
             onRemoveBot={handleRemoveBot}
             onStartGame={handleStartGame}
@@ -363,7 +533,7 @@ export default function App() {
           <RoundSummaryView
             gameState={gameState}
             onNextRound={handleNextRound}
-            onReturnLobby={() => setGameState(null)}
+            onReturnLobby={handleReturnLobby}
           />
         )}
       </main>

@@ -84,8 +84,8 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
       )}
 
       {/* Available Draft Hand Cards */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-        <h3 className="text-sm font-bold font-mono text-amber-300 uppercase tracking-wider flex items-center justify-between">
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4">
+        <h3 className="text-sm font-bold font-mono text-amber-300 uppercase tracking-wider flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
           <span>Xấp Bài Ninja Trôi Tới Tay Bạn (Chọn 1 Lá):</span>
           <span className="text-xs text-slate-400 font-sans">
             Hướng chuyển bài sau khi chọn: <strong className="text-amber-400">{passDirectionVi}</strong>
@@ -97,7 +97,7 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
             ⏳ Đang chờ những Ninja khác hoàn tất chọn bài...
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 justify-items-center">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4 justify-items-center">
             {currentPlayer.draftHand.map((card) => (
               <NinjaCardView
                 key={card.id}
@@ -112,12 +112,12 @@ export const DraftingView: React.FC<DraftingViewProps> = ({
 
         {/* Confirm Selection Button */}
         {selectedCardId && (
-          <div className="text-center pt-4 border-t border-amber-900/30">
+          <div className="sticky bottom-3 z-20 text-center p-3 sm:pt-4 rounded-xl bg-slate-900/95 border border-amber-500/30 shadow-2xl backdrop-blur-md">
             <button
               onClick={handleConfirmPick}
-              className="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-slate-950 font-bold font-serif text-base shadow-xl transition-all transform hover:scale-105"
+              className="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-slate-950 font-bold font-serif text-base shadow-xl transition-all transform hover:scale-105"
             >
-              ✓ Xác Nhận Chọn Lá Bài Bát Này!
+              ✓ Xác Nhận Chọn Lá Bài Này!
             </button>
           </div>
         )}

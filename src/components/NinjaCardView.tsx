@@ -52,13 +52,16 @@ export const NinjaCardView: React.FC<NinjaCardViewProps> = ({
 
   const sizeClasses = {
     sm: 'w-28 h-40 text-xs p-2',
-    md: 'w-40 h-60 text-sm p-3',
+    md: 'w-full max-w-40 h-56 sm:h-60 text-sm p-3',
     lg: 'w-52 h-80 text-base p-4',
   }[size];
 
   if (isFaceDown) {
     return (
-      <motion.div
+      <motion.button
+        type="button"
+        disabled={isDisabled}
+        aria-label="Lá bài Ninja đang úp"
         whileHover={{ scale: isDisabled ? 1 : 1.05 }}
         whileTap={{ scale: isDisabled ? 1 : 0.95 }}
         onClick={isDisabled ? undefined : onClick}
@@ -73,12 +76,16 @@ export const NinjaCardView: React.FC<NinjaCardViewProps> = ({
         <div className="text-[11px] font-serif text-amber-400/60 tracking-widest text-center">
           ĐÊM NINJA
         </div>
-      </motion.div>
+      </motion.button>
     );
   }
 
   return (
-    <motion.div
+    <motion.button
+      type="button"
+      disabled={isDisabled}
+      aria-pressed={isSelected}
+      aria-label={`${card.nameVi}: ${card.descriptionVi}`}
       whileHover={{ scale: isDisabled ? 1 : 1.05, y: isDisabled ? 0 : -6 }}
       whileTap={{ scale: isDisabled ? 1 : 0.95 }}
       onClick={isDisabled ? undefined : onClick}
@@ -121,7 +128,7 @@ export const NinjaCardView: React.FC<NinjaCardViewProps> = ({
           ✓
         </div>
       )}
-    </motion.div>
+    </motion.button>
   );
 };
 

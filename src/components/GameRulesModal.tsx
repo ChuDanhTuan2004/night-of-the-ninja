@@ -8,19 +8,29 @@ interface GameRulesModalProps {
 }
 
 export const GameRulesModal: React.FC<GameRulesModalProps> = ({ isOpen, onClose }) => {
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="max-w-2xl w-full bg-slate-900 border border-amber-600/40 rounded-2xl p-6 shadow-2xl text-slate-200 relative my-8 max-h-[85vh] overflow-y-auto">
+      <div role="dialog" aria-modal="true" aria-labelledby="game-rules-title" className="max-w-2xl w-full bg-slate-900 border border-amber-600/40 rounded-2xl p-6 shadow-2xl text-slate-200 relative my-8 max-h-[85vh] overflow-y-auto">
         <button
           onClick={onClose}
+          aria-label="Đóng luật chơi"
           className="absolute top-4 right-4 p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-2xl font-bold font-serif text-amber-300 mb-1 flex items-center space-x-2">
+        <h2 id="game-rules-title" className="text-2xl font-bold font-serif text-amber-300 mb-1 flex items-center space-x-2">
           <span>📜</span>
           <span>Luật Chơi Night of the Ninja (Đêm Của Ninja)</span>
         </h2>

@@ -91,6 +91,7 @@ export function initializeNewGame(players: Player[], mode: GameMode): GameState 
     ninjaDeck,
     roundWinnerClan: null,
     roundSummaryLogs: [],
+    privateNotices: {},
     actionLogs: [
       {
         id: `log-init-${Date.now()}`,
@@ -101,7 +102,33 @@ export function initializeNewGame(players: Player[], mode: GameMode): GameState 
     ],
   };
 
-  return startRound(state, 1);
+  return state;
+}
+
+function getNextPassAndPlayPlayerId(
+  state: GameState,
+  afterPlayerId: string
+): string | null {
+  const humanPlayers = state.players.filter((player) => !player.isBot);
+  if (humanPlayers.length === 0) return null;
+
+  const minimumPicked = Math.min(
+    ...humanPlayers.map((player) => player.selectedCards.length)
+  );
+  const startIndex = humanPlayers.findIndex((player) => player.id === afterPlayerId);
+
+  for (let offset = 1; offset <= humanPlayers.length; offset++) {
+    const index = (Math.max(startIndex, 0) + offset) % humanPlayers.length;
+    const candidate = humanPlayers[index];
+    if (
+      candidate.draftHand.length > 0 &&
+      candidate.selectedCards.length === minimumPicked
+    ) {
+      return candidate.id;
+    }
+  }
+
+  return humanPlayers[0]?.id || null;
 }
 
 export function startRound(state: GameState, roundNum: number): GameState {
@@ -151,6 +178,7 @@ export function startRound(state: GameState, roundNum: number): GameState {
     ninjaDeck: remainingNinjaDeck,
     roundWinnerClan: null,
     roundSummaryLogs: [],
+    privateNotices: {},
     actionLogs: [newLog, ...state.actionLogs],
     passAndPlayCurrentPlayerId: updatedPlayers[0].id,
     passAndPlayRevealed: false,
@@ -225,7 +253,23 @@ export function handleDraftPick(
     players: updatedPlayers,
   };
 
-  return processBotDraftingIfNeeded(newState);
+  const processedState = processBotDraftingIfNeeded(newState);
+
+  if (
+    processedState.gameMode === 'PASS_AND_PLAY' &&
+    processedState.status === 'DRAFTING'
+  ) {
+    return {
+      ...processedState,
+      passAndPlayCurrentPlayerId: getNextPassAndPlayPlayerId(
+        processedState,
+        playerId
+      ),
+      passAndPlayRevealed: false,
+    };
+  }
+
+  return processedState;
 }
 
 export function processBotDraftingIfNeeded(state: GameState): GameState {
@@ -337,7 +381,16 @@ export function processNextExecutionStep(state: GameState): GameState {
     return executeCardAction(state, actor.id, card.id, targetPlayer?.id);
   }
 
-  // If human, wait for user input or auto-prompt in UI
+  // If human, wait for user input or auto-prompt in UI.
+  // Pass & Play must explicitly hand the device to the correct actor.
+  if (state.gameMode === 'PASS_AND_PLAY') {
+    return {
+      ...state,
+      passAndPlayCurrentPlayerId: actor.id,
+      passAndPlayRevealed: false,
+    };
+  }
+
   return state;
 }
 
@@ -372,6 +425,14 @@ export function executeCardAction(
     players: updatedPlayers,
   };
 
+  const addPrivateNotice = (message: string) => {
+    const existingNotices = nextState.privateNotices?.[actorId] || [];
+    nextState.privateNotices = {
+      ...nextState.privateNotices,
+      [actorId]: [message, ...existingNotices].slice(0, 5),
+    };
+  };
+
   const target = targetId ? updatedPlayers.find((p) => p.id === targetId) : null;
   const secondTarget = secondTargetId ? updatedPlayers.find((p) => p.id === secondTargetId) : null;
 
@@ -379,6 +440,9 @@ export function executeCardAction(
   switch (card.effectType) {
     case 'SPY_HOUSE': {
       if (target && target.house) {
+        addPrivateNotice(
+          `👁️ ${target.name} thuộc ${target.house.nameVi} ${target.house.icon}.`
+        );
         logs.unshift({
           id: `log-act-${Date.now()}`,
           timestamp,
@@ -393,6 +457,12 @@ export function executeCardAction(
     }
 
     case 'SPY_DECK': {
+      const previewCards = nextState.ninjaDeck.slice(0, 2);
+      addPrivateNotice(
+        previewCards.length > 0
+          ? `🃏 Hai lá tiếp theo: ${previewCards.map((previewCard) => previewCard.nameVi).join(' và ')}.`
+          : '🃏 Xấp bài không còn lá nào để xem.'
+      );
       logs.unshift({
         id: `log-act-${Date.now()}`,
         timestamp,
@@ -407,13 +477,16 @@ export function executeCardAction(
     case 'SPY_CLAN_CHECK': {
       if (target && target.house) {
         const isLotus = target.house.type === 'LOTUS';
+        addPrivateNotice(
+          `🔎 ${target.name} ${isLotus ? 'THUỘC' : 'KHÔNG THUỘC'} Gia Tộc Hoa Sen.`
+        );
         logs.unshift({
           id: `log-act-${Date.now()}`,
           timestamp,
           phase: card.rank,
           actorId,
           targetId: target.id,
-          messageVi: `${actor.name} dùng [${card.nameVi}] dò hỏi ${target.name}. (${target.name} ${isLotus ? 'THUỘC' : 'KHÔNG THUỘC'} Gia Tộc Sen).`,
+          messageVi: `${actor.name} dùng [${card.nameVi}] bí mật dò hỏi ${target.name}.`,
           type: 'ACTION',
         });
       }

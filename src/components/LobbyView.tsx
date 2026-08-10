@@ -8,9 +8,11 @@ interface LobbyViewProps {
   gameMode: GameMode;
   players: Player[];
   isHost: boolean;
+  isBusy: boolean;
   onSetGameMode: (mode: GameMode) => void;
   onCreateRoom: (hostName: string, mode: GameMode) => void;
   onJoinRoom: (roomCode: string, name: string) => void;
+  onAddLocalPlayer: (name: string) => void;
   onAddBot: () => void;
   onRemoveBot: (botId: string) => void;
   onStartGame: () => void;
@@ -21,9 +23,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   gameMode,
   players,
   isHost,
+  isBusy,
   onSetGameMode,
   onCreateRoom,
   onJoinRoom,
+  onAddLocalPlayer,
   onAddBot,
   onRemoveBot,
   onStartGame,
@@ -31,6 +35,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [hostName, setHostName] = useState('Ninja Master');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinNameInput, setJoinNameInput] = useState('Shinobi');
+  const [localPlayerName, setLocalPlayerName] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
   const [tab, setTab] = useState<'CREATE' | 'JOIN'>('CREATE');
 
@@ -149,7 +154,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                   >
                     <Users className="w-5 h-5 text-sky-400 mt-0.5 shrink-0" />
                     <div>
-                      <div className="font-bold text-sm text-amber-100 font-serif">Phòng Trực Tuyến 多人</div>
+                      <div className="font-bold text-sm text-amber-100 font-serif">Phòng Trực Tuyến</div>
                       <div className="text-xs text-slate-400">Tạo mã phòng chia sẻ cho bạn bè ở nhiều thiết bị cùng vào!</div>
                     </div>
                   </button>
@@ -158,10 +163,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
               <button
                 onClick={() => onCreateRoom(hostName, gameMode)}
+                disabled={isBusy || !hostName.trim()}
                 className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-slate-950 font-bold font-serif text-base shadow-xl transition-all flex items-center justify-center space-x-2"
               >
                 <Play className="w-5 h-5 fill-current" />
-                <span>Khởi Tạo Phòng Ngay!</span>
+                <span>{isBusy ? 'Đang Khởi Tạo…' : 'Khởi Tạo Phòng Ngay!'}</span>
               </button>
             </div>
           ) : (
@@ -195,11 +201,11 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
 
               <button
                 onClick={() => onJoinRoom(joinCodeInput, joinNameInput)}
-                disabled={!joinCodeInput.trim()}
+                disabled={isBusy || !joinCodeInput.trim() || !joinNameInput.trim()}
                 className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold font-serif text-base shadow-xl transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
               >
                 <Users className="w-5 h-5" />
-                <span>Tham Gia Phòng!</span>
+                <span>{isBusy ? 'Đang Tham Gia…' : 'Tham Gia Phòng!'}</span>
               </button>
             </div>
           )}
@@ -234,7 +240,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
             <span>{copiedCode ? 'Đã Sa Chép!' : 'Sao Chép Mã'}</span>
           </button>
 
-          {isHost && (
+          {isHost && gameMode !== 'PASS_AND_PLAY' && (
             <button
               onClick={onAddBot}
               disabled={players.length >= 11}
@@ -253,6 +259,37 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <Users className="w-4 h-4 text-amber-400" />
           <span>Danh Sách Ninja Tham Gia ({players.length}/11)</span>
         </h3>
+
+        {isHost && gameMode === 'PASS_AND_PLAY' && (
+          <form
+            className="mb-4 flex flex-col sm:flex-row gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!localPlayerName.trim()) return;
+              onAddLocalPlayer(localPlayerName);
+              setLocalPlayerName('');
+            }}
+          >
+            <label htmlFor="local-player-name" className="sr-only">
+              Tên người chơi tiếp theo
+            </label>
+            <input
+              id="local-player-name"
+              value={localPlayerName}
+              onChange={(event) => setLocalPlayerName(event.target.value)}
+              maxLength={24}
+              placeholder="Tên người chơi tiếp theo…"
+              className="flex-1 px-4 py-2.5 rounded-xl bg-slate-950 border border-amber-700/50 text-amber-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={!localPlayerName.trim() || players.length >= 11}
+              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-sm disabled:opacity-50"
+            >
+              Thêm Người Chơi
+            </button>
+          </form>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {players.map((p, idx) => (
@@ -275,11 +312,12 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
                 </div>
               </div>
 
-              {isHost && p.isBot && (
+              {isHost && (p.isBot || (gameMode === 'PASS_AND_PLAY' && !p.isHost)) && (
                 <button
                   onClick={() => onRemoveBot(p.id)}
                   className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
-                  title="Xóa Bot"
+                  title="Xóa người chơi"
+                  aria-label={`Xóa ${p.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -300,10 +338,10 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         <div className="text-center">
           <button
             onClick={onStartGame}
-            disabled={!isLobbyReadyToStart}
+            disabled={!isLobbyReadyToStart || isBusy}
             className="px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 hover:from-amber-500 hover:to-amber-500 text-slate-950 font-black font-serif text-lg shadow-2xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:transform-none"
           >
-            ⚔️ BẮT ĐẦU TRẬN ĐẤU NIGHT OF THE NINJA!
+            {isBusy ? 'ĐANG CHUẨN BỊ TRẬN ĐẤU…' : '⚔️ BẮT ĐẦU TRẬN ĐẤU NIGHT OF THE NINJA!'}
           </button>
         </div>
       )}

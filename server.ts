@@ -12,13 +12,26 @@ import {
 import { BOT_NAMES, AVATARS } from './src/data/cards';
 
 const app = express();
-const PORT = 3003;
+const PORT = Number(process.env.PORT) || 3003;
 
 app.use(express.json());
 
 // In-memory room store
 const rooms = new Map<string, GameState>();
-const sseClients = new Map<string, Set<express.Response>>();
+interface SseClient {
+  response: express.Response;
+  playerId?: string;
+}
+const sseClients = new Map<string, Set<SseClient>>();
+
+function getStateForPlayer(room: GameState, playerId?: string): GameState {
+  return {
+    ...room,
+    privateNotices: playerId
+      ? { [playerId]: room.privateNotices?.[playerId] || [] }
+      : {},
+  };
+}
 
 function broadcastRoomUpdate(roomCode: string) {
   const room = rooms.get(roomCode);
@@ -26,10 +39,10 @@ function broadcastRoomUpdate(roomCode: string) {
 
   const clients = sseClients.get(roomCode);
   if (clients) {
-    const data = `data: ${JSON.stringify(room)}\n\n`;
-    for (const res of clients) {
+    for (const client of clients) {
+      const data = `data: ${JSON.stringify(getStateForPlayer(room, client.playerId))}\n\n`;
       try {
-        res.write(data);
+        client.response.write(data);
       } catch (e) {
         // Handle broken pipe
       }
@@ -98,11 +111,14 @@ app.post('/api/rooms/create', (req, res) => {
     }
   }
 
-  const room = initializeNewGame(initialPlayers, mode || 'ONLINE_ROOM');
+  let room = initializeNewGame(initialPlayers, mode || 'ONLINE_ROOM');
+  if (mode === 'SOLO_BOTS') {
+    room = startRound(room, 1);
+  }
   room.roomCode = roomCode;
   rooms.set(roomCode, room);
 
-  res.json({ roomCode, state: room });
+  res.json({ roomCode, state: getStateForPlayer(room, hostPlayer.id) });
 });
 
 // Join Room
@@ -147,12 +163,12 @@ app.post('/api/rooms/join', (req, res) => {
   rooms.set(code, room);
   broadcastRoomUpdate(code);
 
-  res.json({ playerId: newPlayer.id, state: room });
+  res.json({ playerId: newPlayer.id, state: getStateForPlayer(room, newPlayer.id) });
 });
 
 // Add Bot to Room
 app.post('/api/rooms/add-bot', (req, res) => {
-  const { roomCode } = req.body as { roomCode: string };
+  const { roomCode, playerId } = req.body as { roomCode: string; playerId?: string };
   const code = roomCode?.toUpperCase();
   const room = rooms.get(code);
 
@@ -187,12 +203,12 @@ app.post('/api/rooms/add-bot', (req, res) => {
   rooms.set(code, room);
   broadcastRoomUpdate(code);
 
-  res.json({ state: room });
+  res.json({ state: getStateForPlayer(room, playerId) });
 });
 
 // Remove Bot
 app.post('/api/rooms/remove-bot', (req, res) => {
-  const { roomCode, botId } = req.body as { roomCode: string; botId: string };
+  const { roomCode, botId, playerId } = req.body as { roomCode: string; botId: string; playerId?: string };
   const code = roomCode?.toUpperCase();
   const room = rooms.get(code);
 
@@ -202,12 +218,12 @@ app.post('/api/rooms/remove-bot', (req, res) => {
   rooms.set(code, room);
   broadcastRoomUpdate(code);
 
-  res.json({ state: room });
+  res.json({ state: getStateForPlayer(room, playerId) });
 });
 
 // Start Game
 app.post('/api/rooms/start', (req, res) => {
-  const { roomCode } = req.body as { roomCode: string };
+  const { roomCode, playerId } = req.body as { roomCode: string; playerId?: string };
   const code = roomCode?.toUpperCase();
   const room = rooms.get(code);
 
@@ -220,7 +236,7 @@ app.post('/api/rooms/start', (req, res) => {
   rooms.set(code, startedState);
   broadcastRoomUpdate(code);
 
-  res.json({ state: startedState });
+  res.json({ state: getStateForPlayer(startedState, playerId) });
 });
 
 // Game Action
@@ -254,20 +270,22 @@ app.post('/api/rooms/action', (req, res) => {
   rooms.set(code, room);
   broadcastRoomUpdate(code);
 
-  res.json({ state: room });
+  res.json({ state: getStateForPlayer(room, playerId) });
 });
 
 // Get Room State
 app.get('/api/rooms/:code/state', (req, res) => {
   const code = req.params.code?.toUpperCase();
+  const playerId = typeof req.query.playerId === 'string' ? req.query.playerId : undefined;
   const room = rooms.get(code);
   if (!room) return res.status(404).json({ error: 'Không tìm thấy phòng' });
-  res.json({ state: room });
+  res.json({ state: getStateForPlayer(room, playerId) });
 });
 
 // SSE Live Stream
 app.get('/api/rooms/:code/stream', (req, res) => {
   const code = req.params.code?.toUpperCase();
+  const playerId = typeof req.query.playerId === 'string' ? req.query.playerId : undefined;
   const room = rooms.get(code);
 
   if (!room) {
@@ -281,15 +299,16 @@ app.get('/api/rooms/:code/stream', (req, res) => {
   if (!sseClients.has(code)) {
     sseClients.set(code, new Set());
   }
-  sseClients.get(code)!.add(res);
+  const client: SseClient = { response: res, playerId };
+  sseClients.get(code)!.add(client);
 
   // Send initial state immediately
-  res.write(`data: ${JSON.stringify(room)}\n\n`);
+  res.write(`data: ${JSON.stringify(getStateForPlayer(room, playerId))}\n\n`);
 
   req.on('close', () => {
     const clients = sseClients.get(code);
     if (clients) {
-      clients.delete(res);
+      clients.delete(client);
       if (clients.size === 0) {
         sseClients.delete(code);
       }

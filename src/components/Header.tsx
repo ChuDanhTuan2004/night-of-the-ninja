@@ -27,9 +27,9 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="w-full bg-slate-950/90 backdrop-blur-md border-b border-amber-900/40 px-4 py-3 text-amber-100 flex items-center justify-between shadow-xl sticky top-0 z-40">
+    <header className="w-full bg-slate-950/90 backdrop-blur-md border-b border-amber-900/40 px-3 sm:px-4 py-3 text-amber-100 flex flex-wrap items-center justify-between gap-2 shadow-xl sticky top-0 z-40">
       {/* Brand & Logo */}
-      <div className="flex items-center space-x-3 cursor-pointer" onClick={onReturnLobby}>
+      <button type="button" className="flex items-center space-x-3 text-left" onClick={onReturnLobby} aria-label="Trở về phòng chờ">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-950 via-red-900 to-amber-900 border border-amber-500/40 flex items-center justify-center text-2xl shadow-lg shadow-rose-950/50">
           🥷
         </div>
@@ -41,10 +41,10 @@ export const Header: React.FC<HeaderProps> = ({
             Đêm Của Ninja • Tráo Bài & Đao Phong
           </p>
         </div>
-      </div>
+      </button>
 
       {/* Round & Room Info */}
-      <div className="hidden sm:flex items-center space-x-4">
+      <div className="order-3 sm:order-none w-full sm:w-auto flex items-center justify-center space-x-2 sm:space-x-4">
         {roomCode && (
           <div className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-amber-950/60 border border-amber-600/30 font-mono text-xs text-amber-300">
             <Users className="w-3.5 h-3.5 text-amber-400" />

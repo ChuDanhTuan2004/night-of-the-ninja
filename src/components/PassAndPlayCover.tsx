@@ -13,7 +13,7 @@ export const PassAndPlayCover: React.FC<PassAndPlayCoverProps> = ({
   onReveal,
 }) => {
   return (
-    <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-6 text-center select-none">
+    <div role="dialog" aria-modal="true" aria-labelledby="pass-player-title" className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-6 text-center select-none">
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -28,7 +28,7 @@ export const PassAndPlayCover: React.FC<PassAndPlayCoverProps> = ({
             <ShieldAlert className="w-3.5 h-3.5" />
             <span>CHẾ ĐỘ MẬT • BẢO MẬT MÀN HÌNH</span>
           </div>
-          <h2 className="text-2xl font-bold font-serif text-amber-200">
+          <h2 id="pass-player-title" className="text-2xl font-bold font-serif text-amber-200">
             Chuyển Thiết Bị Cho
           </h2>
           <p className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-rose-300 to-amber-200 mt-1">
