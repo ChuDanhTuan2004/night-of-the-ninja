@@ -34,7 +34,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinNameInput, setJoinNameInput] = useState('Shinobi');
   const [copiedCode, setCopiedCode] = useState(false);
-  const [tab, setTab] = useState<'CREATE' | 'JOIN'>('CREATE');
+  const [tab, setTab] = useState<'CREATE' | 'JOIN'>('JOIN');
 
   const handleCopyCode = () => {
     if (roomCode) {

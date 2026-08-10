@@ -49,6 +49,10 @@ export default function App() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [privateResult, setPrivateResult] = useState<string | null>(null);
   const lastPrivateResultKey = useRef<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const clearCurrentSession = useCallback((message?: string) => {
     localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -489,36 +493,45 @@ export default function App() {
     const confirmation = isOnlineRoom
       ? 'Hủy phòng ngay bây giờ? Tất cả người chơi sẽ được đưa về phòng chờ.'
       : 'Kết thúc ván chơi với bot và trở về màn hình chính?';
-    if (!window.confirm(confirmation)) return;
 
-    if (!isOnlineRoom) {
-      void fetch('/api/rooms/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
-        keepalive: true,
-      }).catch(() => {
-        // A local bot game also works without the room server.
-      });
-      clearCurrentSession();
-      return;
-    }
+    const executeCancel = async () => {
+      if (!isOnlineRoom) {
+        void fetch('/api/rooms/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
+          keepalive: true,
+        }).catch(() => {
+          // A local bot game also works without the room server.
+        });
+        clearCurrentSession();
+        return;
+      }
 
-    setPendingAction('CANCEL_ROOM');
-    setActionError(null);
-    try {
-      const res = await fetch('/api/rooms/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Không thể hủy phòng.');
-      clearCurrentSession();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Không thể hủy phòng.');
-      setPendingAction(null);
-    }
+      setPendingAction('CANCEL_ROOM');
+      setActionError(null);
+      try {
+        const res = await fetch('/api/rooms/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomCode: gameState.roomCode, playerId: myPlayerId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Không thể hủy phòng.');
+        clearCurrentSession();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Không thể hủy phòng.');
+        setPendingAction(null);
+      }
+    };
+
+    setConfirmDialog({
+      message: confirmation,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        void executeCancel();
+      },
+    });
   };
 
   const handleReturnLobby = () => {
@@ -527,10 +540,14 @@ export default function App() {
       gameState.status !== 'LOBBY' &&
       gameState.status !== 'GAME_OVER';
 
-    if (
-      isActiveMatch &&
-      !window.confirm('Rời trận hiện tại? Tiến trình chưa hoàn tất sẽ bị mất.')
-    ) {
+    if (isActiveMatch) {
+      setConfirmDialog({
+        message: 'Rời trận hiện tại? Tiến trình chưa hoàn tất sẽ bị mất.',
+        onConfirm: () => {
+          setConfirmDialog(null);
+          clearCurrentSession();
+        },
+      });
       return;
     }
 
@@ -631,6 +648,45 @@ export default function App() {
             >
               Đã ghi nhớ
             </button>
+          </div>
+        </div>
+      )}
+
+      {confirmDialog && (
+        <div className="modal-overlay">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bottom-sheet max-w-md text-center space-y-5"
+          >
+            <div className="space-y-2">
+              <div className="text-4xl" aria-hidden="true">⚠️</div>
+              <h2 className="phase-title">
+                Xác nhận
+              </h2>
+              <p className="text-secondary text-sm leading-relaxed">
+                {confirmDialog.message}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="btn btn-secondary w-full"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                }}
+                className="btn btn-primary w-full"
+              >
+                Đồng ý
+              </button>
+            </div>
           </div>
         </div>
       )}
