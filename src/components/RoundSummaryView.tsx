@@ -44,21 +44,24 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [isHistoryOpen]);
 
-  const sortedPlayers = [...gameState.players].sort(
-    (a, b) => b.honorTokens.length - a.honorTokens.length,
+  const isGameOver = gameState.status === 'GAME_OVER';
+  const sortedPlayers = [...gameState.players].sort((a, b) =>
+    isGameOver
+      ? b.totalScore - a.totalScore || b.honorTokens.length - a.honorTokens.length
+      : b.honorTokens.length - a.honorTokens.length,
   );
-  let previousTokenCount: number | undefined;
+  let previousRankValue: number | undefined;
   let currentRank = 0;
   const rankedPlayers = sortedPlayers.map((player) => {
     const tokenCount = player.honorTokens.length;
-    if (tokenCount !== previousTokenCount) {
+    const rankValue = isGameOver ? player.totalScore : tokenCount;
+    if (rankValue !== previousRankValue) {
       currentRank += 1;
-      previousTokenCount = tokenCount;
+      previousRankValue = rankValue;
     }
     return { player, rank: currentRank, tokenCount };
   });
   const winners = sortedPlayers.filter((player) => gameState.gameWinners?.includes(player.id));
-  const isGameOver = gameState.status === 'GAME_OVER';
   const roundStartIndex = gameState.actionLogs.findIndex(
     (log) =>
       log.phase === 'ROUND_START' &&
@@ -129,7 +132,7 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
       <div className="game-card game-card-section space-y-4">
         <h3 className="section-title">
           <Trophy className="w-5 h-5" />
-          <span>Bảng Xếp Hạng Phi Tiêu</span>
+          <span>{isGameOver ? 'Bảng Xếp Hạng Honor Chung Cuộc' : 'Bảng Xếp Hạng Phi Tiêu'}</span>
         </h3>
 
         <div className="space-y-2">
@@ -159,11 +162,24 @@ export const RoundSummaryView: React.FC<RoundSummaryViewProps> = ({
                   </div>
                 </div>
 
-                {/* Right: Public honor-token count */}
-                <div className="text-right shrink-0">
-                  <div className="text-xl font-bold text-white">
-                    {tokenCount} <span className="text-xs text-secondary">phi tiêu</span>
-                  </div>
+                {/* Honor values stay secret between rounds and are revealed when the match ends. */}
+                <div className="text-right shrink-0 max-w-[48%]">
+                  {isGameOver ? (
+                    <>
+                      <div className="text-xl font-bold text-white">
+                        {player.totalScore} <span className="text-xs text-secondary">điểm Honor</span>
+                      </div>
+                      <div className="text-xs text-secondary mt-1">
+                        {tokenCount > 0
+                          ? `Phi tiêu: ${player.honorTokens.map((token) => token.value).join(' + ')}`
+                          : 'Không có phi tiêu'}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-xl font-bold text-white">
+                      {tokenCount} <span className="text-xs text-secondary">phi tiêu</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
