@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, HelpCircle, Users, Flame, XCircle } from 'lucide-react';
+import { Volume2, VolumeX, HelpCircle, Users, Flame, XCircle, Settings } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 interface HeaderProps {
@@ -22,6 +22,28 @@ export const Header: React.FC<HeaderProps> = ({
   onCancelRoom,
 }) => {
   const [isMuted, setIsMuted] = React.useState(sounds.getMuted());
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const settingsRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!isSettingsOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!settingsRef.current?.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsSettingsOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSettingsOpen]);
 
   const handleToggleSound = () => {
     const muted = sounds.toggleMute();
@@ -67,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="game-header-actions">
+      <div className="game-header-actions game-header-actions-desktop">
         {canCancelRoom && onCancelRoom && (
           <button
             type="button"
@@ -98,6 +120,66 @@ export const Header: React.FC<HeaderProps> = ({
         >
           {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
         </button>
+      </div>
+
+      <div className="game-header-actions game-header-actions-mobile" ref={settingsRef}>
+        <button
+          type="button"
+          className="btn btn-ghost btn-icon settings-trigger"
+          aria-label="Cài đặt"
+          aria-haspopup="menu"
+          aria-expanded={isSettingsOpen}
+          aria-controls="mobile-settings-menu"
+          onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
+        >
+          <Settings className="w-5 h-5" />
+        </button>
+
+        {isSettingsOpen && (
+          <div id="mobile-settings-menu" className="settings-menu" role="menu">
+            {canCancelRoom && onCancelRoom && (
+              <button
+                type="button"
+                role="menuitem"
+                className="settings-menu-item settings-menu-item-danger"
+                disabled={isCancellingRoom}
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  onCancelRoom();
+                }}
+              >
+                <XCircle className="w-5 h-5" />
+                <span>{isCancellingRoom ? 'Đang hủy…' : 'Hủy phòng'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              role="menuitem"
+              className="settings-menu-item"
+              onClick={() => {
+                setIsSettingsOpen(false);
+                onOpenRules();
+              }}
+            >
+              <HelpCircle className="w-5 h-5" />
+              <span>Luật chơi</span>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              className="settings-menu-item"
+              onClick={() => {
+                handleToggleSound();
+                setIsSettingsOpen(false);
+              }}
+            >
+              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              <span>{isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'}</span>
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

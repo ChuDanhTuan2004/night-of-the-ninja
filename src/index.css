@@ -356,7 +356,56 @@ button { touch-action: manipulation; }
   overflow-x: auto;
   scrollbar-width: none;
 }
-.game-header-actions { display: flex; align-items: center; gap: var(--space-1); }
+.game-header-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.game-header-actions-desktop { display: none; }
+.game-header-actions-mobile { display: flex; }
+.settings-trigger[aria-expanded="true"] {
+  color: var(--text-primary);
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+}
+.settings-menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 45;
+  display: flex;
+  width: 216px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: #1c2852;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+}
+.settings-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  font-weight: 600;
+  text-align: left;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.settings-menu-item:hover:not(:disabled),
+.settings-menu-item:focus-visible {
+  color: var(--text-primary);
+  background: var(--color-surface-hover);
+}
+.settings-menu-item:disabled { opacity: 0.45; }
+.settings-menu-item-danger { color: #fecaca; }
 
 .bottom-action-bar {
   position: sticky;
@@ -556,6 +605,8 @@ button { touch-action: manipulation; }
   .game-brand > div:last-child { display: block; }
   .game-brand-subtitle { display: block; }
   .game-header-info { grid-column: auto; }
+  .game-header-actions-desktop { display: flex; }
+  .game-header-actions-mobile { display: none; }
   .bottom-action-bar {
     margin-inline: 0;
     border: 1px solid var(--color-border);
